@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/unified-fleet/edge-agent/internal/protocol"
+	"github.com/soul-room/edge-agent/internal/protocol"
 )
 
 type Collector interface {

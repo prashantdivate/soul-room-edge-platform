@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/unified-fleet/edge-agent/pkg/connectorsdk"
+	"github.com/soul-room/edge-agent/pkg/connectorsdk"
 )
 
 var ErrCommandNotAllowed = errors.New("connector command is not allowlisted")

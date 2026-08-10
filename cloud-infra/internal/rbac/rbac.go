@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/unified-fleet/cloud-infra/internal/tenancy"
+	"github.com/soul-room/cloud-infra/internal/tenancy"
 )
 
 type Permission string
@@ -13,7 +13,9 @@ const (
 	DeviceRead        Permission = "device.read"
 	DeviceEnroll      Permission = "device.enroll"
 	DeviceUpdate      Permission = "device.update"
+	DeviceDelete      Permission = "device.delete"
 	DeviceCommand     Permission = "device.command"
+	JobDelete         Permission = "job.delete"
 	DeviceReboot      Permission = "device.reboot"
 	TelemetryRead     Permission = "telemetry.read"
 	DeploymentCreate  Permission = "deployment.create"
@@ -28,9 +30,9 @@ const (
 )
 
 var RolePermissions = map[string][]Permission{
-	"platform_administrator":     {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceCommand, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate, TenantSettings},
-	"organization_owner":         {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceCommand, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate, TenantSettings},
-	"organization_administrator": {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceCommand, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate},
+	"platform_administrator":     {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceDelete, DeviceCommand, JobDelete, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate, TenantSettings},
+	"organization_owner":         {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceDelete, DeviceCommand, JobDelete, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate, TenantSettings},
+	"organization_administrator": {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceDelete, DeviceCommand, JobDelete, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate},
 	"fleet_operator":             {DeviceRead, DeviceCommand, TelemetryRead},
 	"deployment_manager":         {DeviceRead, TelemetryRead, DeploymentCreate, DeploymentCancel, ArtifactUpload},
 	"support_engineer":           {DeviceRead, TelemetryRead, DeviceCommand, RemoteCreate},

@@ -5,15 +5,17 @@ agent/build/
 *.exe
 *.test
 coverage/
+**/.gocache/
 
 # Runtime state and local configuration
 .env
 .env.*
 !.env.example
-**/.ufm/
+**/.soul-room/
 **/*.db
 **/backups/
-**/control-plane.json
+**/control-plane*.json
+**/agent-state*.json
 
 # Never commit credentials or device identity
 *.pem

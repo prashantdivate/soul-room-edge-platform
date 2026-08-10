@@ -1,6 +1,6 @@
 package gateways
 
-import "github.com/unified-fleet/cloud-infra/internal/model"
+import "github.com/soul-room/cloud-infra/internal/model"
 
 func Children(parent model.Device, downstream []model.DownstreamDevice) []model.DownstreamDevice {
 	out := []model.DownstreamDevice{}

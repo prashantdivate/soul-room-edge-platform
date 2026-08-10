@@ -1,4 +1,4 @@
-# Axon Control Plane
+# Soul Room Control Plane
 
 Server-side fleet-management platform for Linux edge agents, gateways, and
 downstream embedded controllers. It supports SaaS and customer-managed
@@ -19,12 +19,12 @@ Implemented in this repository:
 * tenant-scoped team accounts with built-in roles and password hashing
 * audited ShellHub remote-access integration
 * audit log
-* artifacts, applications, deployments, OS release plans, canary Flatpak updates, alerts and quotas
+* artifacts, applications, deployments, OS release plans, pilot-group Flatpak updates, alerts and quotas
 * protocol contracts, OpenAPI sketch, PostgreSQL migrations
 * Docker Compose, Helm skeleton, Terraform skeleton, backup/restore scripts
 * responsive React/TypeScript operations console with global fleet search
 * device package inventory with optional Trivy advisory results
-* self-hosted Flatpak repository descriptors with canary-first rollout
+* self-hosted Flatpak repository descriptors with pilot-first rollout
 
 The implementation uses repository interfaces so the runtime can use the local
 durable store for development while production deployments use PostgreSQL and

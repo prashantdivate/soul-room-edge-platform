@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package edge.v1;
 
-option go_package = "github.com/unified-fleet/edge-agent/api/edge/v1;edgev1";
+option go_package = "github.com/soul-room/edge-agent/api/edge/v1;edgev1";
 
 message Envelope {
   string protocol_version = 1;

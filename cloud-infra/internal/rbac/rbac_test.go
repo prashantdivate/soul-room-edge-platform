@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/unified-fleet/cloud-infra/internal/tenancy"
+	"github.com/soul-room/cloud-infra/internal/tenancy"
 )
 
 func TestAuthorizeRole(t *testing.T) {

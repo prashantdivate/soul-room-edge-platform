@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/unified-fleet/edge-agent/internal/identity"
+	"github.com/soul-room/edge-agent/internal/identity"
 )
 
 func TestCollectReadsLinuxInventory(t *testing.T) {

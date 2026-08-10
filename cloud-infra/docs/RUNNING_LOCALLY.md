@@ -75,7 +75,7 @@ and replace `localhost` with the IP address or DNS name the device uses to reach
 this computer:
 
 ```text
-UFM_DEVICE_PUBLIC_HOST=192.168.1.20
+SOULROOM_DEVICE_PUBLIC_HOST=192.168.1.20
 ```
 
 Docker Compose reads this file on Windows, Linux, and macOS. It ensures the

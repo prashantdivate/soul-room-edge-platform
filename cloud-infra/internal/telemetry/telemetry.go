@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/unified-fleet/cloud-infra/internal/model"
-	"github.com/unified-fleet/cloud-infra/internal/protocol"
+	"github.com/soul-room/cloud-infra/internal/model"
+	"github.com/soul-room/cloud-infra/internal/protocol"
 )
 
 func Normalize(deviceID, messageID string, batch protocol.TelemetryBatch) ([]model.Metric, error) {

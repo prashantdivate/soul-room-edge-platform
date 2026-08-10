@@ -3,9 +3,9 @@ package audit
 import (
 	"encoding/json"
 
-	"github.com/unified-fleet/cloud-infra/internal/model"
-	"github.com/unified-fleet/cloud-infra/internal/storage"
-	"github.com/unified-fleet/cloud-infra/internal/tenancy"
+	"github.com/soul-room/cloud-infra/internal/model"
+	"github.com/soul-room/cloud-infra/internal/storage"
+	"github.com/soul-room/cloud-infra/internal/tenancy"
 )
 
 func Record(store *storage.Store, tc tenancy.Context, action, resourceType, resourceID, result string, summary map[string]string) {

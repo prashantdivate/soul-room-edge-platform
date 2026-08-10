@@ -1,5 +1,5 @@
 [Unit]
-Description=Axon Edge Agent
+Description=Soul Room Edge Agent
 After=network-online.target
 Wants=network-online.target
 

@@ -51,7 +51,7 @@ func ValidateCompose(raw json.RawMessage, allowExceptions bool) error {
 			if strings.Contains(host, "/var/run/docker.sock") {
 				return errors.New("docker socket mounts are rejected")
 			}
-			if strings.HasPrefix(host, "/") && !strings.HasPrefix(host, "/var/lib/unified-fleet/managed/") {
+			if strings.HasPrefix(host, "/") && !strings.HasPrefix(host, "/var/lib/soul-room/managed/") {
 				return errors.New("unrestricted host mounts are rejected")
 			}
 		}

@@ -5,10 +5,10 @@ import (
 	"log"
 	"strings"
 
-	"github.com/unified-fleet/cloud-infra/internal/auth"
-	"github.com/unified-fleet/cloud-infra/internal/config"
-	"github.com/unified-fleet/cloud-infra/internal/model"
-	"github.com/unified-fleet/cloud-infra/internal/storage"
+	"github.com/soul-room/cloud-infra/internal/auth"
+	"github.com/soul-room/cloud-infra/internal/config"
+	"github.com/soul-room/cloud-infra/internal/model"
+	"github.com/soul-room/cloud-infra/internal/storage"
 )
 
 func main() {

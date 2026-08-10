@@ -4,7 +4,7 @@ Recommended source/project path on the device, if you copy the project tree for
 debugging:
 
 ```text
-/opt/unified-fleet-management/agent
+/opt/soul-room-platform/agent
 ```
 
 Runtime paths used by the service:

@@ -4,7 +4,7 @@ terraform {
 
 variable "name" {
   type    = string
-  default = "unified-fleet"
+  default = "soul-room"
 }
 
 # Cloud-neutral skeleton: wire to your provider module for managed PostgreSQL,

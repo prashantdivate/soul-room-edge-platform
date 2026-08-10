@@ -1,4 +1,4 @@
-# Axon Edge Agent
+# Soul Room Edge Agent
 
 Open-source Linux edge-device management agent for gateways, industrial PCs,
 embedded Linux devices, and downstream controller fleets.
@@ -13,16 +13,18 @@ Modbus TCP devices.
 
 ```text
 docker build --target test .
-docker build --target raspberry-pi --output type=local,dest=dist/raspberry-pi .
+docker build --target embedded-linux-arm64 --output type=local,dest=dist/embedded-linux-arm64 .
+docker build --target embedded-linux-armv7 --output type=local,dest=dist/embedded-linux-armv7 .
 ```
 
-See `docs/INSTALLATION.md` for the Raspberry Pi enrollment steps.
+See `docs/EMBEDDED_LINUX_INSTALLATION.md` for installation and enrollment on
+64-bit or 32-bit ARM devices.
 
 ## Optional Flatpak Updates
 
 Install Flatpak on the device. A campaign can use an existing system remote or
 an HTTPS `.flatpakrepo` descriptor from a self-hosted repository. The next
-inventory report adds the `ota:flatpak` capability automatically. Axon preserves
+inventory report adds the `ota:flatpak` capability automatically. Soul Room preserves
 GPG verification and runs only validated `flatpak update --system` jobs;
 arbitrary command text is rejected. The packaged systemd unit does not create
 or require a dedicated Linux user.

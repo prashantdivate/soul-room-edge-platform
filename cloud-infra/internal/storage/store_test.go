@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/unified-fleet/cloud-infra/internal/model"
-	"github.com/unified-fleet/cloud-infra/internal/tenancy"
+	"github.com/soul-room/cloud-infra/internal/model"
+	"github.com/soul-room/cloud-infra/internal/tenancy"
 )
 
 func TestTenantIsolationDevicesTelemetryJobsAudit(t *testing.T) {
@@ -61,5 +61,37 @@ func TestJobIdempotency(t *testing.T) {
 	}
 	if first.ID != second.ID {
 		t.Fatal("idempotency key created duplicate job")
+	}
+}
+
+func TestDeleteDeviceRemovesOperationalData(t *testing.T) {
+	store, _ := Open("")
+	org, _ := store.CreateOrganization("Tenant", "tenant-delete")
+	tc := tenancy.Context{TenantID: org.ID}
+	device, _ := store.CreateDevice(model.Device{TenantID: org.ID, DisplayName: "edge"})
+	_ = store.AddTelemetry(tc, []model.Metric{{DeviceID: device.ID, Name: "cpu", Value: 1, DeviceTime: time.Now()}})
+	_ = store.SaveInventory(tc, device.ID, json.RawMessage(`{"os":"linux"}`))
+	_, _ = store.CreateJob(tc, model.Job{DeviceID: device.ID, Type: "collect_inventory", ExpiresAt: time.Now().Add(time.Hour)})
+	if err := store.DeleteDevice(tc, device.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.ListDevices(tc)) != 0 || len(store.ListTelemetry(tc, device.ID)) != 0 || len(store.ListInventory(tc)) != 0 || len(store.ListJobs(tc)) != 0 {
+		t.Fatal("device operational data was not removed")
+	}
+}
+
+func TestDeleteJobRequiresTerminalState(t *testing.T) {
+	store, _ := Open("")
+	org, _ := store.CreateOrganization("Tenant", "tenant-job-delete")
+	tc := tenancy.Context{TenantID: org.ID}
+	device, _ := store.CreateDevice(model.Device{TenantID: org.ID, DisplayName: "edge"})
+	job, _ := store.CreateJob(tc, model.Job{DeviceID: device.ID, Type: "collect_inventory", State: "queued", ExpiresAt: time.Now().Add(time.Hour)})
+	if err := store.DeleteJob(tc, job.ID); err == nil {
+		t.Fatal("queued job was deleted")
+	}
+	job.State = "succeeded"
+	store.data.Jobs[job.ID] = job
+	if err := store.DeleteJob(tc, job.ID); err != nil {
+		t.Fatal(err)
 	}
 }

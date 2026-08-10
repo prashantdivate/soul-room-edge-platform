@@ -1,11 +1,11 @@
-name: unified-fleet
+name: soul-room
 
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: unified_fleet
-      POSTGRES_USER: unified_fleet
+      POSTGRES_DB: soul_room
+      POSTGRES_USER: soul_room
       POSTGRES_PASSWORD: local-dev-only
     ports:
       - "5432:5432"
@@ -13,7 +13,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U unified_fleet -d unified_fleet"]
+      test: ["CMD-SHELL", "pg_isready -U soul_room -d soul_room"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -43,7 +43,7 @@ services:
     command: /dev-seed
     user: "0:0"
     environment:
-      UFM_STORE_PATH: /data/control-plane.json
+      SOULROOM_STORE_PATH: /data/control-plane.json
     volumes:
       - app-data:/data
     depends_on:
@@ -60,12 +60,12 @@ services:
     command: /platform
     user: "0:0"
     environment:
-      UFM_HTTP_ADDR: 0.0.0.0:8080
-      UFM_DEVICE_ADDR: 0.0.0.0:8443
-      UFM_DEVICE_PUBLIC_HOST: ${UFM_DEVICE_PUBLIC_HOST:-localhost}
-      UFM_STORE_PATH: /data/control-plane.json
-      UFM_DEV_CA_DIR: /data/ca
-      UFM_SHELLHUB_URL: ${UFM_SHELLHUB_URL:-}
+      SOULROOM_HTTP_ADDR: 0.0.0.0:8080
+      SOULROOM_DEVICE_ADDR: 0.0.0.0:8443
+      SOULROOM_DEVICE_PUBLIC_HOST: ${SOULROOM_DEVICE_PUBLIC_HOST:-localhost}
+      SOULROOM_STORE_PATH: /data/control-plane.json
+      SOULROOM_DEV_CA_DIR: /data/ca
+      SOULROOM_SHELLHUB_URL: ${SOULROOM_SHELLHUB_URL:-}
     ports:
       - "8080:8080"
       - "8443:8443"
@@ -107,7 +107,7 @@ services:
       - |
         set -eu
         stamp=$$(date +%Y%m%d%H%M%S)
-        pg_dump -h postgres -U unified_fleet unified_fleet > /backup/postgres-$${stamp}.sql
+        pg_dump -h postgres -U soul_room soul_room > /backup/postgres-$${stamp}.sql
         tar czf /backup/data-$${stamp}.tgz -C /source app minio
         echo "Backup set: $${stamp}"
 
@@ -129,7 +129,7 @@ services:
       - |
         set -eu
         test -n "$${BACKUP_SET}"
-        psql -h postgres -U unified_fleet unified_fleet < /backup/postgres-$${BACKUP_SET}.sql
+        psql -h postgres -U soul_room soul_room < /backup/postgres-$${BACKUP_SET}.sql
         tar xzf /backup/data-$${BACKUP_SET}.tgz -C /source
         echo "Restored backup set: $${BACKUP_SET}"
 

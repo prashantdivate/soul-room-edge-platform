@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package fleet.v1;
 
-option go_package = "github.com/unified-fleet/cloud-infra/api/fleet/v1;fleetv1";
+option go_package = "github.com/soul-room/cloud-infra/api/fleet/v1;fleetv1";
 
 message Envelope {
   string protocol_version = 1;

@@ -1,6 +1,6 @@
 version: 1
 server:
-  endpoint: https://192.168.29.146:8443
+  endpoint: https://device-gateway.example.com:8443
   ca_file: /etc/edge-agent/ca.pem
   connect_timeout: 15s
 identity:

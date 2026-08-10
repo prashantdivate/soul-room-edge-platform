@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/unified-fleet/cloud-infra/internal/model"
+	"github.com/soul-room/cloud-infra/internal/model"
 )
 
 var AllowedTypes = map[string]bool{

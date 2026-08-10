@@ -1,15 +1,15 @@
-SUMMARY = "Unified Fleet edge device management agent"
+SUMMARY = "Soul Room edge device management agent"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
-SRC_URI = "git://example.invalid/unified-fleet/edge-agent.git;protocol=https;branch=main"
+SRC_URI = "git://example.invalid/soul-room/edge-agent.git;protocol=https;branch=main"
 SRCREV = "${AUTOREV}"
 
 S = "${WORKDIR}/git"
 
 inherit go systemd
 
-GO_IMPORT = "github.com/unified-fleet/edge-agent"
+GO_IMPORT = "github.com/soul-room/edge-agent"
 SYSTEMD_SERVICE:${PN} = "edge-agent.service"
 
 do_install:append() {

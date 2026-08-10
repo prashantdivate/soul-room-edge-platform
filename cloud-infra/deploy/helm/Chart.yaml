@@ -1,6 +1,6 @@
 apiVersion: v2
-name: unified-fleet-control-plane
-description: Unified Fleet control plane
+name: soul-room-control-plane
+description: Soul Room control plane
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

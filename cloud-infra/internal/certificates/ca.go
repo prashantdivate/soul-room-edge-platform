@@ -48,7 +48,7 @@ func LoadOrCreateDevCA(dir string) (*Authority, error) {
 	}
 	tpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(time.Now().UnixNano()),
-		Subject:               pkix.Name{CommonName: "unified-fleet-development-ca"},
+		Subject:               pkix.Name{CommonName: "soul-room-development-ca"},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(3650 * 24 * time.Hour),
 		IsCA:                  true,

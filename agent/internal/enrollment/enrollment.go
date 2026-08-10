@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unified-fleet/edge-agent/internal/config"
-	"github.com/unified-fleet/edge-agent/internal/identity"
-	"github.com/unified-fleet/edge-agent/internal/protocol"
+	"github.com/soul-room/edge-agent/internal/config"
+	"github.com/soul-room/edge-agent/internal/identity"
+	"github.com/soul-room/edge-agent/internal/protocol"
 )
 
 type Client struct {

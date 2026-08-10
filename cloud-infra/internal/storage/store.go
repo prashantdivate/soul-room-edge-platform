@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/unified-fleet/cloud-infra/internal/auth"
-	"github.com/unified-fleet/cloud-infra/internal/model"
-	"github.com/unified-fleet/cloud-infra/internal/ota"
-	"github.com/unified-fleet/cloud-infra/internal/tenancy"
+	"github.com/soul-room/cloud-infra/internal/auth"
+	"github.com/soul-room/cloud-infra/internal/model"
+	"github.com/soul-room/cloud-infra/internal/ota"
+	"github.com/soul-room/cloud-infra/internal/tenancy"
 )
 
 var (
@@ -399,6 +399,55 @@ func (s *Store) UpdateDevice(device model.Device) error {
 	return s.saveLocked()
 }
 
+func (s *Store) DeleteDevice(tc tenancy.Context, deviceID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	device, ok := s.data.Devices[deviceID]
+	if !ok {
+		return ErrNotFound
+	}
+	if device.TenantID != tc.TenantID {
+		return ErrTenantMismatch
+	}
+	delete(s.data.Devices, deviceID)
+	delete(s.data.Inventory, deviceID)
+	for id, downstream := range s.data.Downstream {
+		if downstream.ParentGatewayID == deviceID {
+			delete(s.data.Downstream, id)
+		}
+	}
+	telemetry := s.data.Telemetry[:0]
+	for _, metric := range s.data.Telemetry {
+		if metric.DeviceID != deviceID {
+			telemetry = append(telemetry, metric)
+		}
+	}
+	s.data.Telemetry = telemetry
+	for id, job := range s.data.Jobs {
+		if job.DeviceID == deviceID {
+			delete(s.data.Jobs, id)
+		}
+	}
+	for id, campaign := range s.data.OTACampaigns {
+		if campaign.TenantID != tc.TenantID {
+			continue
+		}
+		targets := campaign.TargetIDs[:0]
+		for _, targetID := range campaign.TargetIDs {
+			if targetID != deviceID {
+				targets = append(targets, targetID)
+			}
+		}
+		if len(targets) == 0 {
+			delete(s.data.OTACampaigns, id)
+		} else {
+			campaign.TargetIDs = targets
+			s.data.OTACampaigns[id] = campaign
+		}
+	}
+	return s.saveLocked()
+}
+
 func (s *Store) AddTelemetry(tc tenancy.Context, metrics []model.Metric) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -494,6 +543,23 @@ func (s *Store) ListJobs(tc tenancy.Context) []model.Job {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	return out
+}
+
+func (s *Store) DeleteJob(tc tenancy.Context, jobID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	job, ok := s.data.Jobs[jobID]
+	if !ok {
+		return ErrNotFound
+	}
+	if job.TenantID != tc.TenantID {
+		return ErrTenantMismatch
+	}
+	if job.State != "succeeded" && job.State != "failed" && job.State != "expired" && job.State != "cancelled" {
+		return errors.New("only terminal jobs can be removed from history")
+	}
+	delete(s.data.Jobs, jobID)
+	return s.saveLocked()
 }
 
 func (s *Store) UpsertArtifact(artifact model.Artifact) error {

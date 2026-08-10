@@ -3,7 +3,7 @@ package gateway
 import (
 	"context"
 
-	"github.com/unified-fleet/edge-agent/pkg/connectorsdk"
+	"github.com/soul-room/edge-agent/pkg/connectorsdk"
 )
 
 type Gateway struct {

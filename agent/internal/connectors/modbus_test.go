@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/unified-fleet/edge-agent/pkg/connectorsdk"
+	"github.com/soul-room/edge-agent/pkg/connectorsdk"
 )
 
 func TestModbusReadOnlyConnector(t *testing.T) {

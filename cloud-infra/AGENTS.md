@@ -1,6 +1,6 @@
 # Repository Guidance
 
-This repository contains the server-side control plane for Unified Fleet
+This repository contains the server-side control plane for Soul Room
 Management.
 
 Security-sensitive code paths live in `internal/auth`, `internal/rbac`,

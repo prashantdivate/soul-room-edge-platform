@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unified-fleet/edge-agent/internal/storage"
+	"github.com/soul-room/edge-agent/internal/storage"
 )
 
 type Job struct {

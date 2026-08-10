@@ -16,6 +16,8 @@ import {
   Cpu,
   Database,
   Download,
+  FileJson,
+  FileText,
   Eye,
   EyeOff,
   FileClock,
@@ -51,11 +53,36 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   TerminalSquare,
+  Trash2,
   TriangleAlert,
   UploadCloud,
   UsersRound,
   X,
 } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import type { SimpleIcon } from "simple-icons";
+import {
+  siAnydesk,
+  siApache,
+  siCurl,
+  siDocker,
+  siFlatpak,
+  siGit,
+  siGnubash,
+  siLinux,
+  siMariadb,
+  siMongodb,
+  siMysql,
+  siNginx,
+  siNodedotjs,
+  siOpenssl,
+  siPostgresql,
+  siPython,
+  siRabbitmq,
+  siRedis,
+  siTrivy,
+  siUbuntu,
+} from "simple-icons";
 import {
   Area,
   AreaChart,
@@ -63,7 +90,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
+  LabelList,
   Line,
   LineChart,
   Pie,
@@ -80,9 +107,12 @@ import {
   createRemoteAccess,
   createEnrollmentToken,
   createJob,
+  deleteDevice,
+  deleteJob,
   Device,
   EnrollmentToken,
   exportJson,
+  exportPdf,
   FleetData,
   Job,
   loadFleet,
@@ -183,6 +213,9 @@ export default function App() {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [notificationsOpen, setNotificationsOpen] = React.useState(false);
   const [profileOpen, setProfileOpen] = React.useState(false);
+  const [exportOpen, setExportOpen] = React.useState(false);
+  const [exporting, setExporting] = React.useState(false);
+  const pageCanvasRef = React.useRef<HTMLDivElement>(null);
 
   const refresh = React.useCallback(async (activeMembership: Membership) => {
     setLoading(true);
@@ -233,6 +266,8 @@ export default function App() {
   const activePage = pageMap[page];
   const signedInUser = data.users.find((user) => user.id === data.membership.user_id);
   const alerts = deriveAlerts(data.devices);
+  const exportName = `soul-room-${page}-${new Date().toISOString().slice(0, 10)}`;
+  const pageExport = pageExportData(page, data);
   return (
     <div className={sidebarOpen ? "appShell" : "appShell collapsed"}>
       <Sidebar
@@ -281,14 +316,20 @@ export default function App() {
           </div>
         </header>
 
-        <div className="pageCanvas">
+        <div className="pageCanvas" ref={pageCanvasRef}>
           <section className="pageHeading">
             <div>
               <h1>{activePage.label}</h1>
               <p>{activePage.description}</p>
             </div>
             <div className="headingActions">
-              <button className="button secondary" onClick={() => exportJson(`axon-${page}.json`, data)}><Download size={16} /> Export</button>
+              <div className="exportAction">
+                <button className="button secondary" aria-expanded={exportOpen} onClick={() => setExportOpen(!exportOpen)}><Download size={16} /> Export <ChevronDown size={14} /></button>
+                {exportOpen && <div className="exportMenu">
+                  <button onClick={() => { exportJson(`${exportName}.json`, pageExport); setExportOpen(false); }}><FileJson size={17} /><span><strong>JSON data</strong><small>Structured records from this page</small></span></button>
+                  <button disabled={exporting} onClick={async () => { if (!pageCanvasRef.current) return; setExporting(true); setExportOpen(false); try { await exportPdf(`${exportName}.pdf`, pageCanvasRef.current); } finally { setExporting(false); } }}><FileText size={17} /><span><strong>PDF report</strong><small>Charts and visible page content</small></span></button>
+                </div>}
+              </div>
               <button className="iconButton" onClick={() => refresh(membership)} title="Refresh data"><RefreshCw className={loading ? "spin" : ""} size={17} /></button>
             </div>
           </section>
@@ -306,12 +347,12 @@ function Sidebar({ active, open, alertCount, onNavigate }: { active: PageId; ope
   return (
     <aside className={open ? "sidebar open" : "sidebar"} aria-label="Primary navigation">
       <div className="navRail">
-        <div className="railBrand"><img src="/axon-mark.svg" alt="Axon" /></div>
+        <div className="railBrand"><img src="/soul-room-mark.svg" alt="Soul Room" /></div>
         <nav aria-label="Workspace groups">{navigation.map((group) => { const Icon = group.icon; const selected = group === activeGroup; return <button key={group.label} className={selected ? "railButton active" : "railButton"} onClick={() => onNavigate(group.pages[0].id)} title={group.label} aria-label={group.label}><Icon size={20} />{group.label === "Operate" && alertCount > 0 && <i />}</button>; })}</nav>
         <span className="railStatus" title="Platform online"><i /></span>
       </div>
       <div className="navPanel">
-        <div className="brand"><div className="brandText"><strong>Axon</strong><span>Fleet operations</span></div></div>
+        <div className="brand"><div className="brandText"><strong>Soul Room</strong><span>Fleet operations</span></div></div>
         <div className="navContext"><span>Workspace</span><strong>{activeGroup.label}</strong></div>
         <nav className="navScroll">
           <div className="navGroup">
@@ -321,7 +362,7 @@ function Sidebar({ active, open, alertCount, onNavigate }: { active: PageId; ope
             })}
           </div>
         </nav>
-        <div className="sidebarFoot"><span className="connectionDot" /><div><strong>Axon Local</strong><span>All services healthy</span></div></div>
+        <div className="sidebarFoot"><span className="connectionDot" /><div><strong>Soul Room Local</strong><span>All services healthy</span></div></div>
       </div>
     </aside>
   );
@@ -346,24 +387,42 @@ function Login({ loading, error, onSubmit }: { loading: boolean; error: string; 
   const [password, setPassword] = React.useState("change-me-local");
   const [showPassword, setShowPassword] = React.useState(false);
   const [capsLock, setCapsLock] = React.useState(false);
+  const [eventIndex, setEventIndex] = React.useState(0);
+  const reduceMotion = useReducedMotion();
+  const events = ["Device identity verified", "Health signal received", "Pilot update staged", "Policy change recorded"];
+  React.useEffect(() => {
+    if (reduceMotion) return;
+    const timer = window.setInterval(() => setEventIndex((index) => (index + 1) % events.length), 2600);
+    return () => window.clearInterval(timer);
+  }, [reduceMotion, events.length]);
   return (
     <main className="loginPage">
       <section className="loginStory">
-        <div className="loginBrand"><img src="/axon-mark.svg" alt="" /><strong>Axon</strong></div>
-        <div className="storyCopy"><span>Edge operations, connected</span><h1>Know what is running. Act with confidence.</h1><p>Device health, software posture, controlled updates, remote access, and an accountable operating history in one focused workspace.</p><div className="loginNetwork" aria-hidden="true"><div><RadioTower size={18} /><span>EDGE</span></div><i /><div><ShieldCheck size={18} /><span>AXON</span></div><i /><div><CloudCog size={18} /><span>CONTROL</span></div></div></div>
-        <div className="storyStatus"><span className="connectionDot" /><div><strong>Control plane ready</strong><span>API, device gateway, storage, and workers are online</span></div></div>
+        <div className="loginBrand"><img src="/soul-room-mark.svg" alt="" /><strong>Soul Room</strong></div>
+        <div className="storyCopy"><span>Edge operations, composed</span><h1>A calm room for every connected device.</h1><p>Observe health, understand software risk, and deliver controlled changes across embedded Linux fleets.</p></div>
+        <div className="operationsScene" aria-hidden="true">
+          <motion.div className="sceneLane edgeLane" initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .55 }}>
+            <span><Cpu size={18} /></span><span><RadioTower size={18} /></span><span><GitBranch size={18} /></span><small>EDGE FLEET</small>
+          </motion.div>
+          <div className="signalPath leftPath">{[0, 1, 2].map((packet) => <motion.i key={packet} animate={reduceMotion ? undefined : { left: ["2%", "88%"], opacity: [0, 1, 1, 0] }} transition={{ duration: 2.5, repeat: Infinity, delay: packet * .8, ease: "easeInOut" }} />)}</div>
+          <motion.div className="sceneCore" initial={{ opacity: 0, scale: .78 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 170, damping: 18, delay: .2 }}><img src="/soul-room-mark.svg" alt="" /><strong>Soul Room</strong><span>CONTROL PLANE</span><motion.b animate={reduceMotion ? undefined : { scale: [1, 1.18, 1], opacity: [.45, .12, .45] }} transition={{ duration: 2.8, repeat: Infinity }} /></motion.div>
+          <div className="signalPath rightPath">{[0, 1, 2].map((packet) => <motion.i key={packet} animate={reduceMotion ? undefined : { left: ["2%", "88%"], opacity: [0, 1, 1, 0] }} transition={{ duration: 2.8, repeat: Infinity, delay: packet * .9, ease: "easeInOut" }} />)}</div>
+          <motion.div className="sceneLane controlLane" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .55, delay: .15 }}>
+            <span><ShieldCheck size={18} /></span><span><CloudCog size={18} /></span><span><TerminalSquare size={18} /></span><small>OPERATIONS</small>
+          </motion.div>
+        </div>
+        <div className="sceneEvent"><span className="connectionDot" /><AnimatePresence mode="wait"><motion.strong key={events[eventIndex]} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .28 }}>{events[eventIndex]}</motion.strong></AnimatePresence><small>Encrypted and audit recorded</small></div>
       </section>
       <section className="loginFormWrap">
-        <form className="loginForm" onSubmit={(event) => { event.preventDefault(); onSubmit(email, password); }}>
-          <div className="mobileLoginBrand"><img src="/axon-mark.svg" alt="" /><strong>Axon</strong></div>
-          <div className="formIntro"><span className="overline">Secure operations console</span><h2>Welcome back</h2><p>Use your organization account to continue.</p></div>
+        <motion.form className="loginForm" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .5, delay: .12 }} onSubmit={(event) => { event.preventDefault(); onSubmit(email, password); }}>
+          <div className="mobileLoginBrand"><img src="/soul-room-mark.svg" alt="" /><strong>Soul Room</strong></div>
+          <div className="formIntro"><span className="overline">Private operations workspace</span><h2>Welcome back</h2><p>Sign in with your organization account.</p></div>
           {error && <div className="formError"><AlertTriangle size={17} />{error}</div>}
           <label>Email address<div className="loginInput"><Mail size={16} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" autoFocus /></div></label>
           <label>Password<div className="loginInput"><LockKeyhole size={16} /><input type={showPassword ? "text" : "password"} value={password} onKeyUp={(event) => setCapsLock(event.getModifierState("CapsLock"))} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" /><button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>{capsLock && <span className="capsNotice">Caps Lock is on</span>}</label>
-          <button className="button primary loginButton" disabled={loading}>{loading ? <LoaderCircle className="spin" size={18} /> : <LockKeyhole size={17} />}{loading ? "Signing in..." : "Sign in"}</button>
+          <motion.button whileHover={reduceMotion ? undefined : { y: -1 }} whileTap={reduceMotion ? undefined : { scale: .985 }} className="button primary loginButton" disabled={loading}>{loading ? <LoaderCircle className="spin" size={18} /> : <LockKeyhole size={17} />}{loading ? "Signing in..." : "Sign in"}</motion.button>
           <div className="loginAssurance"><ShieldCheck size={16} /><span>Session-protected and tenant-scoped access</span></div>
-          <div className="devNote"><strong>Local Compose workspace</strong><span>Seed credentials are pre-filled for this local environment.</span></div>
-        </form>
+        </motion.form>
       </section>
     </main>
   );
@@ -377,7 +436,7 @@ function PageContent({ page, data, search, onData, onNavigate, onRefresh }: { pa
     case "gateways": return <Gateways {...props} />;
     case "telemetry": return <Telemetry {...props} />;
     case "inventory": return <InventoryView {...props} />;
-    case "map": return <FleetMap data={data} onData={onData} onRemote={(device) => { sessionStorage.setItem("ufm_remote_device", device.id); onNavigate("remote"); }} />;
+    case "map": return <FleetMap data={data} onData={onData} onRemote={(device) => { sessionStorage.setItem("soul_room_remote_device", device.id); onNavigate("remote"); }} />;
     case "jobs": return <Jobs {...props} />;
     case "remote": return <RemoteAccess {...props} />;
     case "deployments": return <Deployments data={data} />;
@@ -409,7 +468,7 @@ function Overview({ data, onNavigate }: ViewProps) {
       <Metric label="Update coverage" value={`${Math.round(current * 100 / data.devices.length)}%`} note={`${current} of ${data.devices.length} devices current`} tone="blue" icon={<PackageCheck size={18} />} />
     </section>
     <Panel title="Fleet availability" subtitle="Current presence reported by agents" action={<button className="textButton" onClick={() => onNavigate("health")}>Open system health <ChevronRight size={15} /></button>}>
-      <div className="overviewAvailability"><div className="donutChart"><PresenceChart connected={connected} total={data.devices.length} /></div><div className="availabilityCopy"><span className="overline">Heartbeat posture</span><strong>{connected === data.devices.length ? "Every device is reachable" : `${data.devices.length - connected} device${data.devices.length - connected === 1 ? "" : "s"} need a connection check`}</strong><p>Axon marks a device offline only when its real heartbeat exceeds the presence window. Host resource charts live in System Health.</p></div></div>
+      <div className="overviewAvailability"><div className="donutChart"><PresenceChart connected={connected} total={data.devices.length} /></div><div className="availabilityCopy"><span className="overline">Heartbeat posture</span><strong>{connected === data.devices.length ? "Every device is reachable" : `${data.devices.length - connected} device${data.devices.length - connected === 1 ? "" : "s"} need a connection check`}</strong><p>Soul Room marks a device offline only when its real heartbeat exceeds the presence window. Host resource charts live in System Health.</p></div></div>
     </Panel>
     <Panel title="Attention queue" subtitle="Generated from current device health, presence, and certificate dates">
       {alerts.length ? <div className="attentionList">{alerts.map((alert) => <Attention key={alert.id} severity={alert.severity} title={alert.title} detail={alert.detail} action="Review" onClick={() => onNavigate(alert.page)} />)}</div> : <EmptyState text="No device issues are active." />}
@@ -420,9 +479,30 @@ function Overview({ data, onNavigate }: ViewProps) {
   </>;
 }
 
-function Devices({ data, search, onNavigate }: ViewProps) {
+function Devices({ data, search, onNavigate, onData }: ViewProps) {
   const [status, setStatus] = React.useState("all");
   const [selected, setSelected] = React.useState<Device | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<Device | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState("");
+  const canDelete = canAdminister(data.membership);
+  async function removeDevice() {
+    if (!deleteTarget) return;
+    setDeleting(true); setDeleteError("");
+    try {
+      await deleteDevice(data.membership, deleteTarget.id);
+      onData({
+        ...data,
+        devices: data.devices.filter((device) => device.id !== deleteTarget.id),
+        metrics: data.metrics.filter((metric) => metric.device_id !== deleteTarget.id),
+        jobs: data.jobs.filter((job) => job.device_id !== deleteTarget.id),
+        downstream: data.downstream.filter((device) => device.parent_gateway_id !== deleteTarget.id),
+        otaCampaigns: data.otaCampaigns.filter((campaign) => campaign.target_device_ids.some((id) => id !== deleteTarget.id)).map((campaign) => ({ ...campaign, target_device_ids: campaign.target_device_ids.filter((id) => id !== deleteTarget.id) })),
+      });
+      setDeleteTarget(null);
+    } catch (reason) { setDeleteError(reason instanceof Error ? reason.message : "The device could not be removed."); }
+    finally { setDeleting(false); }
+  }
   const filtered = data.devices.filter((device) => (status === "all" || device.presence === status) && `${device.display_name} ${device.serial} ${device.tags?.join(" ")}`.toLowerCase().includes(search.toLowerCase()));
   return <>
     <Toolbar><div className="segmented"><button className={status === "all" ? "active" : ""} onClick={() => setStatus("all")}>All <span>{data.devices.length}</span></button><button className={status === "connected" ? "active" : ""} onClick={() => setStatus("connected")}>Connected</button><button className={status === "offline" ? "active" : ""} onClick={() => setStatus("offline")}>Offline</button></div><button className="button primary" onClick={() => onNavigate("enrollment")}><Plus size={16} /> Add device</button></Toolbar>
@@ -433,8 +513,9 @@ function Devices({ data, search, onNavigate }: ViewProps) {
       <div className="deviceIdentity"><div className="deviceGlyph"><Cpu size={25} /></div><div><Badge value={selected.presence} /><p>{selected.hardware_model}</p></div></div>
       <DetailList items={[["Serial", selected.serial], ["Profile", selected.profile_id], ["Operating system", selected.os], ["Kernel", selected.kernel], ["Architecture", selected.architecture], ["Agent", selected.agent_version], ["Last seen", formatDate(selected.last_seen_at)], ["Certificate expires", formatDate(selected.certificate_expires_at)]]} />
       <h3>Capabilities</h3><div className="tagRow">{selected.capabilities?.map((value) => <span className="tag" key={value}>{value}</span>)}</div>
-      <div className="drawerActions"><button className="button warningButton" onClick={() => { setSelected(null); onNavigate("jobs"); }}><TerminalSquare size={16} /> Run job</button><button className="button infoButton" onClick={() => { setSelected(null); onNavigate("health"); }}><Activity size={16} /> System health</button></div>
+      <div className="drawerActions"><button className="button warningButton" onClick={() => { setSelected(null); onNavigate("jobs"); }}><TerminalSquare size={16} /> Run job</button><button className="button infoButton" onClick={() => { setSelected(null); onNavigate("health"); }}><Activity size={16} /> System health</button>{canDelete && <button className="button dangerButton" onClick={() => { setDeleteTarget(selected); setSelected(null); }}><Trash2 size={16} /> Remove device</button>}</div>
     </Drawer>}
+    {deleteTarget && <Modal title="Remove registered device" onClose={() => !deleting && setDeleteTarget(null)}><div className="modalForm"><div className="destructiveNotice"><Trash2 size={20} /><div><strong>{deleteTarget.display_name}</strong><span>This removes its registration, telemetry, inventory, pending jobs, and update targeting. Audit records remain.</span></div></div>{deleteError && <div className="formError"><AlertTriangle size={17} />{deleteError}</div>}<div className="modalActions"><button className="button secondary" disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</button><button className="button dangerButton" disabled={deleting} onClick={removeDevice}>{deleting ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />} Remove device</button></div></div></Modal>}
   </>;
 }
 
@@ -492,6 +573,8 @@ function Jobs({ data, onData }: ViewProps) {
   const [filter, setFilter] = React.useState<"all" | "queued" | "completed">("all");
   const [jobError, setJobError] = React.useState("");
   const [selectedJob, setSelectedJob] = React.useState<Job | null>(null);
+  const [deleteArmed, setDeleteArmed] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
   React.useEffect(() => {
     if (!deviceId && data.devices[0]) setDeviceId(data.devices[0].id);
   }, [data.devices, deviceId]);
@@ -510,11 +593,19 @@ function Jobs({ data, onData }: ViewProps) {
   const visibleJobs = data.jobs.filter((job) => filter === "all" || (filter === "queued" ? ["queued", "delivered"].includes(job.state) : ["succeeded", "failed", "expired"].includes(job.state)));
   const queuedCount = data.jobs.filter((job) => ["queued", "delivered"].includes(job.state)).length;
   const completedCount = data.jobs.filter((job) => ["succeeded", "failed", "expired"].includes(job.state)).length;
-  return <><Toolbar><div className="segmented" aria-label="Job state filter"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All jobs <span>{data.jobs.length}</span></button><button className={filter === "queued" ? "active" : ""} onClick={() => setFilter("queued")}>Queued <span>{queuedCount}</span></button><button className={filter === "completed" ? "active" : ""} onClick={() => setFilter("completed")}>Completed <span>{completedCount}</span></button></div><button className="button warningButton" disabled={data.devices.length === 0} onClick={() => { setJobError(""); setShowCreate(true); }}><Play size={16} /> Run job</button></Toolbar><Panel title="Job history" subtitle="Safe device operations and their returned results"><SimpleTable headers={["Job", "Device", "Type", "State", "Approval", "Created", "Expires", "Result"]} rows={visibleJobs.map((job) => [shortId(job.id), nameFor(data, job.device_id), job.type.replaceAll("_", " "), <Badge value={job.state} />, job.approval_status, formatDate(job.created_at), formatDate(job.expires_at), <button className="textButton" onClick={() => setSelectedJob(job)}>View</button>])} empty={filter === "all" ? "No jobs have been sent to a real device." : `No ${filter} jobs.`} /></Panel>{showCreate && <Modal title="Run a device job" onClose={() => setShowCreate(false)}><div className="modalForm"><label>Target device<select value={deviceId} onChange={(event) => setDeviceId(event.target.value)}>{data.devices.map((device) => <option value={device.id} key={device.id}>{device.display_name} - {device.presence}</option>)}</select></label><label>Job type<select value={type} onChange={(event) => setType(event.target.value)}><option value="collect_diagnostics">Collect diagnostics</option><option value="collect_logs">Collect logs</option><option value="collect_inventory">Refresh inventory</option></select></label>{jobError && <div className="formError"><AlertTriangle size={17} />{jobError}</div>}<div className="notice"><ShieldCheck size={18} /><div><strong>Safe operation</strong><span>No arbitrary shell command, reboot, or service restart is permitted.</span></div></div><div className="modalActions"><button className="button secondary" onClick={() => setShowCreate(false)}>Cancel</button><button className="button warningButton" onClick={submit} disabled={saving || !deviceId}>{saving ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />} Queue job</button></div></div></Modal>}{selectedJob && <Modal title="Job details" onClose={() => setSelectedJob(null)}><div className="jobResult"><DetailList items={[["Job", selectedJob.id], ["Device", nameFor(data, selectedJob.device_id)], ["Type", selectedJob.type.replaceAll("_", " ")], ["State", <Badge value={selectedJob.state} />], ["Created", formatDate(selectedJob.created_at)]]} /><h3>Returned output</h3><pre>{jobOutput(selectedJob)}</pre></div></Modal>}</>;
+  const canDelete = canAdminister(data.membership) && selectedJob && ["succeeded", "failed", "expired", "cancelled"].includes(selectedJob.state);
+  async function removeJob() {
+    if (!selectedJob) return;
+    setDeleting(true); setJobError("");
+    try { await deleteJob(data.membership, selectedJob.id); onData({ ...data, jobs: data.jobs.filter((job) => job.id !== selectedJob.id) }); setSelectedJob(null); setDeleteArmed(false); }
+    catch (reason) { setJobError(reason instanceof Error ? reason.message : "The job history entry could not be removed."); }
+    finally { setDeleting(false); }
+  }
+  return <><Toolbar><div className="segmented" aria-label="Job state filter"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All jobs <span>{data.jobs.length}</span></button><button className={filter === "queued" ? "active" : ""} onClick={() => setFilter("queued")}>Queued <span>{queuedCount}</span></button><button className={filter === "completed" ? "active" : ""} onClick={() => setFilter("completed")}>Completed <span>{completedCount}</span></button></div><button className="button warningButton" disabled={data.devices.length === 0} onClick={() => { setJobError(""); setShowCreate(true); }}><Play size={16} /> Run job</button></Toolbar><Panel title="Job history" subtitle="Safe device operations and their returned results"><SimpleTable headers={["Job", "Device", "Type", "State", "Approval", "Created", "Expires", "Result"]} rows={visibleJobs.map((job) => [shortId(job.id), nameFor(data, job.device_id), job.type.replaceAll("_", " "), <Badge value={job.state} />, job.approval_status, formatDate(job.created_at), formatDate(job.expires_at), <button className="textButton" onClick={() => { setJobError(""); setDeleteArmed(false); setSelectedJob(job); }}>View</button>])} empty={filter === "all" ? "No jobs have been sent to a real device." : `No ${filter} jobs.`} /></Panel>{showCreate && <Modal title="Run a device job" onClose={() => setShowCreate(false)}><div className="modalForm"><label>Target device<select value={deviceId} onChange={(event) => setDeviceId(event.target.value)}>{data.devices.map((device) => <option value={device.id} key={device.id}>{device.display_name} - {device.presence}</option>)}</select></label><label>Job type<select value={type} onChange={(event) => setType(event.target.value)}><option value="collect_diagnostics">Collect diagnostics</option><option value="collect_logs">Collect logs</option><option value="collect_inventory">Refresh inventory</option></select></label>{jobError && <div className="formError"><AlertTriangle size={17} />{jobError}</div>}<div className="notice"><ShieldCheck size={18} /><div><strong>Safe operation</strong><span>No arbitrary shell command, reboot, or service restart is permitted.</span></div></div><div className="modalActions"><button className="button secondary" onClick={() => setShowCreate(false)}>Cancel</button><button className="button warningButton" onClick={submit} disabled={saving || !deviceId}>{saving ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />} Queue job</button></div></div></Modal>}{selectedJob && <Modal title="Job details" onClose={() => { if (!deleting) { setSelectedJob(null); setDeleteArmed(false); } }}><div className="jobResult"><DetailList items={[["Job", selectedJob.id], ["Device", nameFor(data, selectedJob.device_id)], ["Type", selectedJob.type.replaceAll("_", " ")], ["State", <Badge value={selectedJob.state} />], ["Created", formatDate(selectedJob.created_at)]]} /><h3>Returned output</h3><pre>{jobOutput(selectedJob)}</pre>{jobError && <div className="formError"><AlertTriangle size={17} />{jobError}</div>}{canDelete && <div className="jobDelete"><div><strong>Remove this history entry</strong><span>Completed output is deleted. Its audit trail is retained.</span></div>{deleteArmed ? <div className="jobDeleteConfirm"><button className="button secondary" onClick={() => setDeleteArmed(false)}>Cancel</button><button className="button dangerButton" disabled={deleting} onClick={removeJob}>{deleting ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />} Confirm delete</button></div> : <button className="button dangerButton" onClick={() => setDeleteArmed(true)}><Trash2 size={16} /> Delete history</button>}</div>}</div></Modal>}</>;
 }
 
 function RemoteAccess({ data, onData }: ViewProps) {
-  const initial = sessionStorage.getItem("ufm_remote_device") || data.devices[0]?.id || "";
+  const initial = sessionStorage.getItem("soul_room_remote_device") || data.devices[0]?.id || "";
   const [deviceId, setDeviceId] = React.useState(initial);
   const [systemUser, setSystemUser] = React.useState("root");
   const device = data.devices.find((item) => item.id === deviceId) || data.devices[0];
@@ -546,7 +637,7 @@ function RemoteAccess({ data, onData }: ViewProps) {
     <section className="remoteLayout">
       <Panel title="Open a terminal" subtitle="Select an online device and its existing Linux user">
         <div className="remoteForm">
-          <label>Device<select value={device.id} onChange={(event) => { setDeviceId(event.target.value); sessionStorage.setItem("ufm_remote_device", event.target.value); }}>{data.devices.map((item) => <option value={item.id} key={item.id}>{item.display_name} - {item.presence}</option>)}</select></label>
+          <label>Device<select value={device.id} onChange={(event) => { setDeviceId(event.target.value); sessionStorage.setItem("soul_room_remote_device", event.target.value); }}>{data.devices.map((item) => <option value={item.id} key={item.id}>{item.display_name} - {item.presence}</option>)}</select></label>
           <label>Linux user<input value={systemUser} onChange={(event) => setSystemUser(event.target.value)} placeholder="root" /></label>
           <div className="remoteTarget"><div><span>ShellHub SSHID</span><strong>{device.remote_access_id || "Not mapped"}</strong></div><Badge value={device.presence} /></div>
           {message && <div className="inlineNotice">{message}</div>}
@@ -557,7 +648,7 @@ function RemoteAccess({ data, onData }: ViewProps) {
         <div className="remoteForm"><label>ShellHub SSHID<input value={sshId} onChange={(event) => setSSHId(event.target.value)} placeholder="device.namespace@ssh.example.com" /></label><button className="button successButton" onClick={saveMapping} disabled={saving || !sshId.trim()}><Save size={16} />{saving ? "Saving..." : "Save mapping"}</button><div className="remoteChecklist"><div className={device.presence === "connected" ? "done" : ""}><Check size={15} /><span>Fleet agent online</span></div><div className={Boolean(device.remote_access_id) ? "done" : ""}><Check size={15} /><span>ShellHub device accepted</span></div><div className={data.platform.remote_access_configured ? "done" : ""}><Check size={15} /><span>Gateway URL configured</span></div></div></div>
       </Panel>
     </section>
-    {!data.platform.remote_access_configured && <div className="safetyBanner warning"><Settings2 size={20} /><div><strong>Set the ShellHub endpoint</strong><span>Add <code>UFM_SHELLHUB_URL=https://shellhub.example.com</code> to the Compose environment and recreate the platform container.</span></div></div>}
+    {!data.platform.remote_access_configured && <div className="safetyBanner warning"><Settings2 size={20} /><div><strong>Set the ShellHub endpoint</strong><span>Add <code>SOULROOM_SHELLHUB_URL=https://shellhub.example.com</code> to the Compose environment and recreate the platform container.</span></div></div>}
   </>;
 }
 
@@ -571,7 +662,7 @@ function Deployments({ data }: { data: FleetData }) {
 function OTA({ data, onData }: { data: FleetData; onData: (data: FleetData) => void }) {
   const [showCreate, setShowCreate] = React.useState(false);
   const [name, setName] = React.useState(""); const [version, setVersion] = React.useState(""); const [product, setProduct] = React.useState("");
-  const [architecture, setArchitecture] = React.useState(data.devices[0]?.architecture || "arm64"); const [adapter, setAdapter] = React.useState<"mender" | "rauc" | "ostree" | "flatpak">("mender");
+  const [architecture, setArchitecture] = React.useState("arm64"); const [adapter, setAdapter] = React.useState<"mender" | "rauc" | "ostree" | "flatpak">("mender");
   const [artifactUrl, setArtifactURL] = React.useState(""); const [digest, setDigest] = React.useState(""); const [signature, setSignature] = React.useState("");
   const [flatpakRef, setFlatpakRef] = React.useState(""); const [flatpakRemote, setFlatpakRemote] = React.useState("flathub"); const [flatpakCommit, setFlatpakCommit] = React.useState("");
   const [flatpakRepositoryURL, setFlatpakRepositoryURL] = React.useState("");
@@ -597,11 +688,11 @@ function OTA({ data, onData }: { data: FleetData; onData: (data: FleetData) => v
     catch (reason) { setError(reason instanceof Error ? reason.message : "The campaign could not be promoted."); }
   }
   return <>
-    <section className="otaReadiness"><div><span className="otaIcon"><ShieldCheck size={22} /></span><span><strong>Controlled update delivery</strong><small>Signed OS releases and canary-first Flatpak application updates</small></span></div><div><strong>{capable.length}</strong><span>{adapter} ready</span></div><div><strong>{data.otaCampaigns.length}</strong><span>campaigns</span></div><button className="button primary" onClick={() => setShowCreate(true)} disabled={!data.devices.length}><Plus size={16} /> Create campaign</button></section>
-    <div className="safetyBanner"><ShieldCheck size={21} /><div><strong>Flatpak updates are executable now</strong><span>Flatpak campaigns queue an allowlisted application-update job to the canary, then wait for an administrator to promote the remaining targets. OS image adapters remain signed release plans until their device adapter is installed.</span></div></div>
+    <section className="otaReadiness"><div><span className="otaIcon"><ShieldCheck size={22} /></span><span><strong>Controlled update delivery</strong><small>Signed OS releases and pilot-first Flatpak application updates</small></span></div><div><strong>{capable.length}</strong><span>{adapter} ready</span></div><div><strong>{data.otaCampaigns.length}</strong><span>campaigns</span></div><button className="button primary" onClick={() => setShowCreate(true)} disabled={!data.devices.length}><Plus size={16} /> Create campaign</button></section>
+    <div className="safetyBanner"><ShieldCheck size={21} /><div><strong>Start small, then continue with confidence</strong><span>The pilot group receives the update first. Soul Room waits for an administrator before continuing to the remaining targets. Flatpak can use an existing remote or your own HTTPS .flatpakrepo descriptor.</span></div></div>
     {error && !showCreate && <div className="inlineError"><AlertTriangle size={17} />{error}<button onClick={() => setError("")}><X size={15} /></button></div>}
-    <Panel title="Update campaigns" subtitle="Operating-system releases and Flatpak application rollouts"><SimpleTable headers={["Campaign", "Targets", "Type", "Release", "Canary", "State", "Created", "Action"]} rows={data.otaCampaigns.map((campaign) => [campaign.name, campaign.target_device_ids.length, campaign.adapter === "flatpak" ? "Flatpak app" : `${campaign.adapter} OS`, campaign.adapter === "flatpak" ? campaign.flatpak_ref || campaign.version : `${campaign.version} / ${campaign.architecture}`, `${campaign.canary_percent}%`, <Badge value={campaign.state} />, formatDate(campaign.created_at), campaign.state === "canary_complete" ? <button className="button successButton compactButton" onClick={() => promote(campaign.id)}><Play size={14} /> Continue rollout</button> : <span className="tableMuted">-</span>])} empty="Create an update campaign to begin a controlled rollout." /></Panel>
-    {showCreate && <Modal title="Create update campaign" onClose={() => setShowCreate(false)}><div className="modalForm otaForm"><div className="formGrid"><label>Campaign name<input value={name} onChange={(event) => setName(event.target.value)} placeholder={isFlatpak ? "Kiosk application 1.4" : "August security release"} /></label><label>Release version<input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="2026.08.1" /></label><label>Update type<select value={adapter} onChange={(event) => { setAdapter(event.target.value as typeof adapter); setTargets([]); }}><option value="flatpak">Flatpak application</option><option value="mender">Mender OS image</option><option value="rauc">RAUC OS bundle</option><option value="ostree">OSTree OS commit</option></select></label><label>Canary percentage<input type="number" min="1" max="100" value={canary} onChange={(event) => setCanary(Number(event.target.value))} /></label>{!isFlatpak && <><label>Product<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="raspberry-pi" /></label><label>Architecture<select value={architecture} onChange={(event) => setArchitecture(event.target.value)}>{Array.from(new Set(data.devices.map((device) => device.architecture || "unknown"))).map((value) => <option key={value}>{value}</option>)}</select></label></>}</div>{isFlatpak ? <><div className="formSectionLabel">Flatpak application</div><label>Application reference<input value={flatpakRef} onChange={(event) => setFlatpakRef(event.target.value.trim())} placeholder="com.example.Kiosk" /></label><div className="formGrid"><label>Remote name<input value={flatpakRemote} onChange={(event) => setFlatpakRemote(event.target.value.trim())} placeholder="factory" /></label><label>OSTree commit (optional)<input value={flatpakCommit} onChange={(event) => setFlatpakCommit(event.target.value.trim())} placeholder="Pin an exact 64-character commit" /></label></div><label>Repository descriptor URL (optional)<input type="url" value={flatpakRepositoryURL} onChange={(event) => setFlatpakRepositoryURL(event.target.value.trim())} placeholder="https://updates.example.com/factory.flatpakrepo" /><span className="formHint">Leave blank to use an existing device remote. A descriptor URL securely adds your hosted remote with its declared GPG key.</span></label></> : <><label>HTTPS artifact URL<input value={artifactUrl} onChange={(event) => setArtifactURL(event.target.value)} placeholder="https://releases.example.com/device-v2.mender" /></label><label>SHA-256 digest<input value={digest} onChange={(event) => setDigest(event.target.value.trim())} placeholder="64 hexadecimal characters" /></label><label>Signature reference<input value={signature} onChange={(event) => setSignature(event.target.value)} placeholder="Key ID or detached signature reference" /></label></>}<fieldset className="targetPicker"><legend>Target devices</legend>{data.devices.filter((device) => isFlatpak || !architecture || !device.architecture || device.architecture === architecture).map((device) => { const ready = device.capabilities?.includes(`ota:${adapter}`) || !isFlatpak; return <label key={device.id} className={!ready ? "disabledTarget" : ""}><input type="checkbox" disabled={!ready} checked={targets.includes(device.id)} onChange={(event) => setTargets(event.target.checked ? [...targets, device.id] : targets.filter((id) => id !== device.id))} /><span><strong>{device.display_name}</strong><small>{device.presence} - {ready ? `${adapter} ready` : "install Flatpak and update the Axon agent first"}</small></span></label>; })}</fieldset>{error && <div className="formError"><AlertTriangle size={17} />{error}</div>}<div className="modalActions"><button className="button secondary" onClick={() => setShowCreate(false)}>Cancel</button><button className="button primary" disabled={saving} onClick={create}>{saving ? <LoaderCircle className="spin" size={16} /> : <CloudCog size={16} />}{isFlatpak ? "Create and queue canary" : "Save release plan"}</button></div></div></Modal>}
+    <Panel title="Update campaigns" subtitle="Operating-system releases and Flatpak application rollouts"><SimpleTable headers={["Campaign", "Targets", "Type", "Release", "Pilot group", "State", "Created", "Action"]} rows={data.otaCampaigns.map((campaign) => [campaign.name, campaign.target_device_ids.length, campaign.adapter === "flatpak" ? "Flatpak app" : `${campaign.adapter} OS`, campaign.adapter === "flatpak" ? campaign.flatpak_ref || campaign.version : `${campaign.version} / ${campaign.architecture}`, `${campaign.canary_percent}%`, <Badge value={formatCampaignState(campaign.state)} />, formatDate(campaign.created_at), campaign.state === "canary_complete" ? <button className="button successButton compactButton" onClick={() => promote(campaign.id)}><Play size={14} /> Continue rollout</button> : <span className="tableMuted">-</span>])} empty="Create an update campaign to begin a controlled rollout." /></Panel>
+    {showCreate && <Modal title="Create update campaign" onClose={() => setShowCreate(false)}><div className="modalForm otaForm"><div className="formGrid"><label>Campaign name<input value={name} onChange={(event) => setName(event.target.value)} placeholder={isFlatpak ? "Kiosk application 1.4" : "August security release"} /></label><label>Release version<input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="2026.08.1" /></label><label>Update type<select value={adapter} onChange={(event) => { setAdapter(event.target.value as typeof adapter); setTargets([]); }}><option value="flatpak">Flatpak application</option><option value="mender">Mender OS image</option><option value="rauc">RAUC OS bundle</option><option value="ostree">OSTree OS commit</option></select></label><label>Pilot group (%)<div className="rangeField"><input type="range" min="1" max="100" value={canary} onChange={(event) => setCanary(Number(event.target.value))} /><output>{canary}%</output></div><span className="formHint">This percentage updates first. Continue only after those devices succeed.</span></label>{!isFlatpak && <><label>Product<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="embedded-linux" /></label><label>Architecture<select value={architecture} onChange={(event) => { setArchitecture(event.target.value); setTargets([]); }}><option value="arm64">64-bit ARM (arm64 / aarch64)</option><option value="armv7">32-bit ARM (armv7 / armhf)</option><option value="amd64">x86-64 (amd64)</option></select></label></>}</div>{isFlatpak ? <><div className="formSectionLabel">Flatpak application</div><label>Application reference<input value={flatpakRef} onChange={(event) => setFlatpakRef(event.target.value.trim())} placeholder="com.example.Kiosk" /></label><div className="formGrid"><label>Remote name<input value={flatpakRemote} onChange={(event) => setFlatpakRemote(event.target.value.trim())} placeholder="factory" /></label><label>OSTree commit (optional)<input value={flatpakCommit} onChange={(event) => setFlatpakCommit(event.target.value.trim())} placeholder="Pin an exact 64-character commit" /></label></div><label>Repository descriptor URL (optional)<input type="url" value={flatpakRepositoryURL} onChange={(event) => setFlatpakRepositoryURL(event.target.value.trim())} placeholder="https://updates.example.com/factory.flatpakrepo" /><span className="formHint">Leave blank to use an existing device remote. A descriptor URL securely adds your hosted remote with its declared GPG key.</span></label></> : <><label>HTTPS artifact URL<input value={artifactUrl} onChange={(event) => setArtifactURL(event.target.value)} placeholder="https://releases.example.com/device-v2.mender" /></label><label>SHA-256 digest<input value={digest} onChange={(event) => setDigest(event.target.value.trim())} placeholder="64 hexadecimal characters" /></label><label>Signature reference<input value={signature} onChange={(event) => setSignature(event.target.value)} placeholder="Key ID or detached signature reference" /></label></>}<fieldset className="targetPicker"><legend>Target devices</legend>{data.devices.filter((device) => isFlatpak || !architecture || !device.architecture || normalizeArchitecture(device.architecture) === architecture).map((device) => { const ready = device.capabilities?.includes(`ota:${adapter}`) || !isFlatpak; return <label key={device.id} className={!ready ? "disabledTarget" : ""}><input type="checkbox" disabled={!ready} checked={targets.includes(device.id)} onChange={(event) => setTargets(event.target.checked ? [...targets, device.id] : targets.filter((id) => id !== device.id))} /><span><strong>{device.display_name}</strong><small>{device.presence} - {ready ? `${adapter} ready` : "install Flatpak and update the Soul Room agent first"}</small></span></label>; })}</fieldset>{error && <div className="formError"><AlertTriangle size={17} />{error}</div>}<div className="modalActions"><button className="button secondary" onClick={() => setShowCreate(false)}>Cancel</button><button className="button primary" disabled={saving} onClick={create}>{saving ? <LoaderCircle className="spin" size={16} /> : <CloudCog size={16} />}{isFlatpak ? "Create and queue pilot" : "Save release plan"}</button></div></div></Modal>}
   </>;
 }
 
@@ -645,10 +736,10 @@ function Applications({ data, onData }: { data: FleetData; onData: (data: FleetD
     <Toolbar><div className="segmented"><button className={tab === "packages" ? "active" : ""} onClick={() => setTab("packages")}>Device packages</button><button className={tab === "managed" ? "active" : ""} onClick={() => setTab("managed")}>Managed apps</button></div>{tab === "packages" && <><label className="selectLabel">Device<select value={device?.id || ""} onChange={(event) => { setDeviceId(event.target.value); setVisible(40); }}>{data.devices.map((item) => <option value={item.id} key={item.id}>{item.display_name}</option>)}</select></label><button className="button warningButton" onClick={scan} disabled={!device || !canScan || scanning || device.presence !== "connected"}>{scanning ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />} Scan advisories</button></>}</Toolbar>
     {tab === "managed" ? <><Panel title="Managed applications" subtitle="Validated application records from the control plane"><SimpleTable headers={["Application", "Version", "Target", "State"]} rows={data.applications.map((app) => [recordText(app, "name"), recordText(app, "version"), recordText(app, "target"), <Badge value={recordText(app, "state")} />])} empty="No managed applications have been added." /></Panel><div className="policyFoot"><ShieldCheck size={18} /><span>Host networking, privileged containers, Docker socket mounts, and unrestricted host paths are rejected by default.</span></div></> : !device ? <EmptySection icon={<PackageSearch size={28} />} title="No package inventory" text="Enroll a device to see its installed software packages." /> : <>
       <section className="packageSummary"><Metric label="Installed packages" value={String(packages.length)} note={`Reported by ${device.display_name}`} tone="blue" icon={<Boxes size={18} />} /><Metric label="Critical advisories" value={report ? String(report.counts.CRITICAL || 0) : "—"} note={report ? "Review before production" : "Run a device scan"} tone={report?.counts.CRITICAL ? "red" : "green"} icon={<AlertTriangle size={18} />} /><Metric label="High advisories" value={report ? String(report.counts.HIGH || 0) : "—"} note={report ? "Evidence from Trivy" : "No scan result yet"} tone={report?.counts.HIGH ? "amber" : "green"} icon={<ShieldCheck size={18} />} /><Metric label="Last scan" value={report ? relativeTime(report.scanned_at) : "Not run"} note={report ? `${report.total} advisory matches` : canScan ? "Scanner is ready" : "Trivy not reported"} tone="cyan" icon={<Clock3 size={18} />} /></section>
-      {!canScan && <div className="safetyBanner warning"><TriangleAlert size={20} /><div><strong>Package inventory is available; advisory scanning is not</strong><span>Install Trivy on this device and restart the Axon agent to enable evidence-backed CVE matching.</span></div></div>}
+      {!canScan && <div className="safetyBanner warning"><TriangleAlert size={20} /><div><strong>Package inventory is available; advisory scanning is not</strong><span>Install Trivy on this device and restart the Soul Room agent to enable evidence-backed CVE matching.</span></div></div>}
       {scanError && <div className="formError"><AlertTriangle size={17} />{scanError}</div>}
       <Panel title="Software package inventory" subtitle="Real packages reported by the selected device; advisory matches come from the latest completed scan" action={<label className="packageFilter"><Search size={15} /><input value={packageSearch} onChange={(event) => { setPackageSearch(event.target.value); setVisible(40); }} placeholder="Filter packages" aria-label="Filter installed packages" /></label>}>
-        {filtered.length ? <><div className="packageGrid">{filtered.slice(0, visible).map((item) => { const risk = risks.get(item.name); const risky = risk && (risk.critical > 0 || risk.high > 0); return <article className="packageTile" key={`${item.name}-${item.version}`}><span className={risky ? "packageIcon risky" : "packageIcon"}><Boxes size={19} /></span><div><strong title={item.name}>{item.name}</strong><span title={item.version}>{item.version}</span></div><Badge value={risk ? risk.highest_severity.toLowerCase() : report ? "clear" : "not scanned"} />{risk && <small>{risk.critical + risk.high + risk.medium + risk.low} advisories{risk.fixed_version ? ` · fix ${risk.fixed_version}` : ""}</small>}</article>; })}</div>{visible < filtered.length && <div className="showMore"><button className="button secondary" onClick={() => setVisible(visible + 40)}>Show 40 more</button><span>{visible} of {filtered.length}</span></div>}</> : <EmptyState text={packages.length ? "No packages match this filter." : "This agent has not reported package inventory yet."} />}
+        {filtered.length ? <><div className="packageGrid">{filtered.slice(0, visible).map((item) => { const risk = risks.get(item.name); return <article className="packageTile" key={`${item.name}-${item.version}`}><PackageBrandIcon name={item.name} /><div><strong title={item.name}>{item.name}</strong><span title={item.version}>{item.version}</span></div><Badge value={risk ? risk.highest_severity.toLowerCase() : report ? "clear" : "not scanned"} />{risk && <small>{risk.critical + risk.high + risk.medium + risk.low} advisories{risk.fixed_version ? ` · fix ${risk.fixed_version}` : ""}</small>}</article>; })}</div>{visible < filtered.length && <div className="showMore"><button className="button secondary" onClick={() => setVisible(visible + 40)}>Show 40 more</button><span>{visible} of {filtered.length}</span></div>}</> : <EmptyState text={packages.length ? "No packages match this filter." : "This agent has not reported package inventory yet."} />}
       </Panel>
       <div className="policyFoot"><ShieldCheck size={18} /><span>Advisory matches are guidance, not proof of exploitability. Review package use, exposure, and available fixes before making a production decision.</span></div>
     </>}
@@ -665,7 +756,7 @@ function Enrollment({ data, onData }: ViewProps) {
   const [created, setCreated] = React.useState<EnrollmentToken | null>(null);
   const [saving, setSaving] = React.useState(false);
   async function create() { setSaving(true); try { const token = await createEnrollmentToken(data.membership, profile, ttl); setCreated(token); onData({ ...data, enrollmentTokens: [token, ...data.enrollmentTokens] }); } finally { setSaving(false); } }
-  return <section className="enrollmentLayout"><Panel title="Create enrollment token" subtitle="A token can be used once and expires automatically"><div className="enrollForm"><label>Profile ID (optional)<input value={profile} onChange={(event) => setProfile(event.target.value)} placeholder="raspberry-pi" /></label><label>Valid for<select value={ttl} onChange={(event) => setTtl(event.target.value)}><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="168h">7 days</option></select></label><button className="button successButton" onClick={create} disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <KeyRound size={16} />} Generate token</button>{created?.token && <div className="tokenResult"><span>Copy this token now. It is shown only once.</span><code>{created.token}</code><button className="button infoButton" onClick={() => navigator.clipboard.writeText(created.token || "")}><ClipboardCheck size={16} /> Copy token</button></div>}</div></Panel><Panel title="Connect the device" subtitle="The Raspberry Pi agent needs two values"><ol className="steps"><li><span>1</span><div><strong>Download the development CA</strong><p>Install it on the device at <code>/etc/edge-agent/ca.pem</code>.</p><a className="button infoButton" href="/api/v1/dev-ca" download><Download size={16} /> Download CA</a></div></li><li><span>2</span><div><strong>Set the gateway endpoint</strong><p>Use <code>{data.platform.device_gateway_endpoint}</code> in the agent configuration.</p></div></li><li><span>3</span><div><strong>Enroll once</strong><p>Start the agent with the token. Its private key never leaves the device.</p></div></li></ol></Panel><Panel title="Recent tokens" subtitle="Token values are not stored after creation"><SimpleTable headers={["ID", "Profile", "Usage", "Expires", "Created"]} rows={data.enrollmentTokens.map((token) => [shortId(token.id), token.profile_id || "Default", `${token.used_count} / ${token.max_devices}`, formatDate(token.expires_at), formatDate(token.created_at)])} empty="No enrollment tokens have been created." /></Panel></section>;
+  return <section className="enrollmentLayout"><Panel title="Create enrollment token" subtitle="A token can be used once and expires automatically"><div className="enrollForm"><label>Profile ID (optional)<input value={profile} onChange={(event) => setProfile(event.target.value)} placeholder="embedded-linux-arm64" /></label><label>Valid for<select value={ttl} onChange={(event) => setTtl(event.target.value)}><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="168h">7 days</option></select></label><button className="button successButton" onClick={create} disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <KeyRound size={16} />} Generate token</button>{created?.token && <div className="tokenResult"><span>Copy this token now. It is shown only once.</span><code>{created.token}</code><button className="button infoButton" onClick={() => navigator.clipboard.writeText(created.token || "")}><ClipboardCheck size={16} /> Copy token</button></div>}</div></Panel><Panel title="Connect the device" subtitle="The embedded Linux agent needs two values"><ol className="steps"><li><span>1</span><div><strong>Download the development CA</strong><p>Install it on the device at <code>/etc/edge-agent/ca.pem</code>.</p><a className="button infoButton" href="/api/v1/dev-ca" download><Download size={16} /> Download CA</a></div></li><li><span>2</span><div><strong>Set the gateway endpoint</strong><p>Use <code>{data.platform.device_gateway_endpoint}</code> in the agent configuration.</p></div></li><li><span>3</span><div><strong>Enroll once</strong><p>Start the agent with the token. Its private key never leaves the device.</p></div></li></ol></Panel><Panel title="Recent tokens" subtitle="Token values are not stored after creation"><SimpleTable headers={["ID", "Profile", "Usage", "Expires", "Created"]} rows={data.enrollmentTokens.map((token) => [shortId(token.id), token.profile_id || "Default", `${token.used_count} / ${token.max_devices}`, formatDate(token.expires_at), formatDate(token.created_at)])} empty="No enrollment tokens have been created." /></Panel></section>;
 }
 
 function Audit({ data, search }: { data: FleetData; search: string }) {
@@ -726,7 +817,7 @@ function Health({ data }: { data: FleetData }) {
 }
 
 function OnPrem({ data }: { data: FleetData }) {
-  return <><div className="adminSummary"><div><span className="overline">Installation</span><strong>Axon Local</strong><p>Single-node Docker Compose - Version 0.1.0</p></div><Badge value="running" /></div><section className="adminGrid"><AdminAction icon={<Archive size={20} />} title="Backup & restore" detail="Use the Compose maintenance profile for portable backups." primary="Backup" meta="No synthetic backup history" /><AdminAction icon={<ShieldCheck size={20} />} title="Certificates" detail="Download the CA trusted by enrolled devices." primary="Download CA" href="/api/v1/dev-ca" meta={`${data.devices.length} issued device identities`} /><AdminAction icon={<HardDrive size={20} />} title="Fleet records" detail="Live records currently loaded from the platform store." primary="Review" meta={`${data.devices.length} devices - ${data.metrics.length} samples`} /><AdminAction icon={<PackageCheck size={20} />} title="Platform version" detail="Current local control-plane release." primary="Version" meta="0.1.0" /></section><Panel title="Environment endpoints" subtitle="Addresses exposed by the local Compose stack"><DetailList items={[["Web console", window.location.origin], ["Control API", `${window.location.protocol}//${window.location.hostname}:8080`], ["Device gateway", data.platform.device_gateway_endpoint], ["MinIO console", `http://${window.location.hostname}:9001`], ["Mailpit", `http://${window.location.hostname}:8025`]]} /></Panel></>;
+  return <><div className="adminSummary"><div><span className="overline">Installation</span><strong>Soul Room Local</strong><p>Single-node Docker Compose - Version 0.1.0</p></div><Badge value="running" /></div><section className="adminGrid"><AdminAction icon={<Archive size={20} />} title="Backup & restore" detail="Use the Compose maintenance profile for portable backups." primary="Backup" meta="No synthetic backup history" /><AdminAction icon={<ShieldCheck size={20} />} title="Certificates" detail="Download the CA trusted by enrolled devices." primary="Download CA" href="/api/v1/dev-ca" meta={`${data.devices.length} issued device identities`} /><AdminAction icon={<HardDrive size={20} />} title="Fleet records" detail="Live records currently loaded from the platform store." primary="Review" meta={`${data.devices.length} devices - ${data.metrics.length} samples`} /><AdminAction icon={<PackageCheck size={20} />} title="Platform version" detail="Current local control-plane release." primary="Version" meta="0.1.0" /></section><Panel title="Environment endpoints" subtitle="Addresses exposed by the local Compose stack"><DetailList items={[["Web console", window.location.origin], ["Control API", `${window.location.protocol}//${window.location.hostname}:8080`], ["Device gateway", data.platform.device_gateway_endpoint], ["MinIO console", `http://${window.location.hostname}:9001`], ["Mailpit", `http://${window.location.hostname}:8025`]]} /></Panel></>;
 }
 
 function DeviceTable({ devices, compact = false, onSelect }: { devices: Device[]; compact?: boolean; onSelect?: (device: Device) => void }) {
@@ -748,7 +839,7 @@ function SimpleTable({ headers, rows, empty = "Nothing to show." }: { headers: s
 function EmptyState({ text }: { text: string }) { return <div className="emptyState"><FileClock size={22} /><span>{text}</span></div>; }
 
 function EmptyFleet({ onEnroll }: { onEnroll: () => void }) {
-  return <section className="emptyFleet"><div className="emptyFleetVisual"><RadioTower size={34} /><span className="signal one" /><span className="signal two" /></div><span className="overline">Ready for a real device</span><h2>Your fleet is empty</h2><p>Create a one-time token, enroll the Raspberry Pi, and its actual inventory and telemetry will populate this workspace.</p><button className="button successButton" onClick={onEnroll}><Plus size={16} /> Enroll first device</button><div className="emptyFlow"><span><strong>1</strong> Create token</span><ChevronRight size={15} /><span><strong>2</strong> Start agent</span><ChevronRight size={15} /><span><strong>3</strong> Watch live data</span></div></section>;
+  return <section className="emptyFleet"><div className="emptyFleetVisual"><RadioTower size={34} /><span className="signal one" /><span className="signal two" /></div><span className="overline">Ready for a real device</span><h2>Your fleet is empty</h2><p>Create a one-time token, enroll an embedded Linux device, and its actual inventory and telemetry will populate this workspace.</p><button className="button successButton" onClick={onEnroll}><Plus size={16} /> Enroll first device</button><div className="emptyFlow"><span><strong>1</strong> Create token</span><ChevronRight size={15} /><span><strong>2</strong> Start agent</span><ChevronRight size={15} /><span><strong>3</strong> Watch live data</span></div></section>;
 }
 
 function EmptySection({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
@@ -779,16 +870,19 @@ function Capacity({ label, value, detail }: { label: string; value: number; deta
 
 function AdminAction({ icon, title, detail, primary, meta, href }: { icon: React.ReactNode; title: string; detail: string; primary: string; meta: string; href?: string }) { const button = <>{icon}<div><strong>{title}</strong><span>{detail}</span></div><ChevronRight size={18} /></>; return <section className="adminAction">{href ? <a href={href} download>{button}</a> : <button disabled title={`${primary} action is not configured`}>{button}</button>}<small>{meta}</small></section>; }
 
-function TelemetryChart({ data }: { data: { time: string; cpu?: number; memory?: number; disk?: number; temperature?: number }[] }) { return <ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 10, right: 18, left: -16, bottom: 0 }}><defs><linearGradient id="cpuFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#18a999" stopOpacity={0.28} /><stop offset="100%" stopColor="#18a999" stopOpacity={0.02} /></linearGradient><linearGradient id="memoryFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5b7cfa" stopOpacity={0.2} /><stop offset="100%" stopColor="#5b7cfa" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid stroke="#e9edf5" vertical={false} /><XAxis dataKey="time" tick={{ fill: "#8290a3", fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis domain={[0, 100]} tick={{ fill: "#8290a3", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ border: "1px solid #dbe3ef", borderRadius: 6, boxShadow: "0 8px 24px rgba(41,55,78,.12)" }} /><Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" dataKey="cpu" name="CPU %" stroke="#129c8c" fill="url(#cpuFill)" strokeWidth={2.5} dot={false} /><Area type="monotone" dataKey="memory" name="Memory %" stroke="#5b7cfa" fill="url(#memoryFill)" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="disk" name="Disk %" stroke="#f59e0b" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="temperature" name="Temp °C" stroke="#ef5b5b" strokeWidth={2} dot={false} /></AreaChart></ResponsiveContainer>; }
+function TelemetryChart({ data }: { data: { time: string; cpu?: number; memory?: number; disk?: number; temperature?: number }[] }) {
+  const series = [{ label: "CPU", color: "#168f7d" }, { label: "Memory", color: "#5966be" }, { label: "Disk", color: "#c98a20" }, { label: "Temperature", color: "#cb5a52" }];
+  return <div className="chartComposition"><div className="chartKey">{series.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}</span>)}</div><div className="chartPlot"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 10, right: 22, left: -10, bottom: 2 }}><CartesianGrid stroke="#e5eceb" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="time" minTickGap={38} tick={{ fill: "#748583", fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis domain={[0, 100]} width={42} tickFormatter={(value) => `${value}%`} tick={{ fill: "#748583", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip cursor={{ stroke: "#a9b9b6", strokeDasharray: "3 3" }} contentStyle={chartTooltipStyle} formatter={(value, seriesName) => [`${Number(value).toFixed(1)}${seriesName === "Temp °C" ? " °C" : "%"}`, seriesName]} /><Area type="monotone" dataKey="cpu" name="CPU" stroke="#168f7d" fill="#168f7d" fillOpacity={0.07} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Area type="monotone" dataKey="memory" name="Memory" stroke="#5966be" fill="#5966be" fillOpacity={0.045} strokeWidth={2.25} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Line type="monotone" dataKey="disk" name="Disk" stroke="#c98a20" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Line type="monotone" dataKey="temperature" name="Temp °C" stroke="#cb5a52" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /></AreaChart></ResponsiveContainer></div></div>;
+}
 
 function PresenceChart({ connected, total }: { connected: number; total: number }) {
-  const rows = [{ name: "Connected", value: connected, color: "#21b978" }, { name: "Not connected", value: Math.max(total - connected, 0), color: "#ef6a6a" }];
-  return <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={rows} dataKey="value" nameKey="name" innerRadius={62} outerRadius={84} paddingAngle={3}>{rows.map((row) => <Cell key={row.name} fill={row.color} />)}</Pie><Tooltip /><Legend verticalAlign="bottom" iconType="circle" iconSize={8} /></PieChart></ResponsiveContainer>;
+  const rows = total ? [{ name: "Connected", value: connected, color: "#2a9d7f" }, { name: "Not connected", value: Math.max(total - connected, 0), color: "#d96861" }] : [{ name: "No devices", value: 1, color: "#dfe7e6" }];
+  return <div className="chartComposition presenceComposition"><div className="chartPlot"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={rows} dataKey="value" nameKey="name" innerRadius={66} outerRadius={88} startAngle={90} endAngle={-270} paddingAngle={total > 0 ? 2 : 0} cornerRadius={5}>{rows.map((row) => <Cell key={row.name} fill={row.color} stroke="none" />)}</Pie><Tooltip contentStyle={chartTooltipStyle} /><text x="50%" y="45%" textAnchor="middle" className="donutValue">{total ? `${Math.round(connected * 100 / total)}%` : "—"}</text><text x="50%" y="55%" textAnchor="middle" className="donutLabel">online</text></PieChart></ResponsiveContainer></div><div className="chartKey centered"><span><i style={{ background: "#2a9d7f" }} />Connected</span><span><i style={{ background: "#d96861" }} />Not connected</span></div></div>;
 }
 
 function ConnectorChart({ devices }: { devices: FleetData["downstream"] }) {
   const counts = Array.from(devices.reduce((map, device) => map.set(device.connector_type, (map.get(device.connector_type) || 0) + 1), new Map<string, number>())).map(([name, value]) => ({ name, value }));
-  return <ResponsiveContainer width="100%" height="100%"><BarChart data={counts} layout="vertical" margin={{ left: 8, right: 22 }}><CartesianGrid stroke="#e9edf5" horizontal={false} /><XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false} /><YAxis type="category" dataKey="name" width={95} axisLine={false} tickLine={false} /><Tooltip /><Bar dataKey="value" name="Devices" fill="#2b8ee6" radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer>;
+  return <ResponsiveContainer width="100%" height="100%"><BarChart data={counts} layout="vertical" margin={{ left: 8, right: 40 }}><XAxis type="number" hide /><YAxis type="category" dataKey="name" width={95} axisLine={false} tickLine={false} tick={{ fill: "#536865", fontSize: 12 }} /><Tooltip cursor={{ fill: "#f3f7f6" }} contentStyle={chartTooltipStyle} /><Bar dataKey="value" name="Devices" fill="#3f7f9f" radius={[0, 5, 5, 0]} maxBarSize={18} background={{ fill: "#edf2f1", radius: 5 }}><LabelList dataKey="value" position="right" fill="#425653" fontSize={12} /></Bar></BarChart></ResponsiveContainer>;
 }
 
 function ResourceBars({ metrics }: { metrics: FleetData["metrics"] }) {
@@ -799,7 +893,7 @@ function ResourceBars({ metrics }: { metrics: FleetData["metrics"] }) {
     { name: "Temperature", value: latestMatching(metrics, "temperature"), fill: "#ef6a6a" },
   ].filter((row) => row.value !== undefined);
   if (!rows.length) return <ChartEmpty text="Waiting for current resource values" />;
-  return <ResponsiveContainer width="100%" height="100%"><BarChart data={rows} layout="vertical" margin={{ left: 18, right: 24 }}><CartesianGrid stroke="#e9edf5" horizontal={false} /><XAxis type="number" domain={[0, 100]} axisLine={false} tickLine={false} /><YAxis type="category" dataKey="name" width={82} axisLine={false} tickLine={false} /><Tooltip formatter={(value) => `${Number(value).toFixed(1)}`} /><Bar dataKey="value" radius={[0, 5, 5, 0]}>{rows.map((row) => <Cell key={row.name} fill={row.fill} />)}</Bar></BarChart></ResponsiveContainer>;
+  return <ResponsiveContainer width="100%" height="100%"><BarChart data={rows} layout="vertical" margin={{ top: 8, left: 12, right: 54, bottom: 8 }}><XAxis type="number" domain={[0, 100]} hide /><YAxis type="category" dataKey="name" width={92} axisLine={false} tickLine={false} tick={{ fill: "#536865", fontSize: 12 }} /><Tooltip cursor={{ fill: "#f3f7f6" }} contentStyle={chartTooltipStyle} formatter={(value) => Number(value).toFixed(1)} /><Bar dataKey="value" radius={[0, 5, 5, 0]} maxBarSize={18} background={{ fill: "#edf2f1", radius: 5 }}><LabelList dataKey="value" position="right" formatter={(value) => Number(value).toFixed(1)} fill="#425653" fontSize={12} />{rows.map((row) => <Cell key={row.name} fill={row.fill} />)}</Bar></BarChart></ResponsiveContainer>;
 }
 
 function NetworkChart({ metrics }: { metrics: FleetData["metrics"] }) {
@@ -808,19 +902,56 @@ function NetworkChart({ metrics }: { metrics: FleetData["metrics"] }) {
     { name: "Transmitted", value: latestMatching(metrics, "network.transmit_bytes_total"), fill: "#21b978" },
   ].filter((row) => row.value !== undefined).map((row) => ({ ...row, value: Number(row.value) / 1024 / 1024 }));
   if (!rows.length) return <ChartEmpty text="Waiting for network counters" />;
-  return <ResponsiveContainer width="100%" height="100%"><BarChart data={rows} margin={{ top: 12, right: 18, left: 4 }}><CartesianGrid stroke="#e9edf5" vertical={false} /><XAxis dataKey="name" axisLine={false} tickLine={false} /><YAxis unit=" MB" axisLine={false} tickLine={false} /><Tooltip formatter={(value) => `${Number(value).toFixed(1)} MB`} /><Bar dataKey="value" radius={[5, 5, 0, 0]}>{rows.map((row) => <Cell key={row.name} fill={row.fill} />)}</Bar></BarChart></ResponsiveContainer>;
+  return <ResponsiveContainer width="100%" height="100%"><BarChart data={rows} margin={{ top: 28, right: 22, left: 2, bottom: 2 }}><CartesianGrid stroke="#e5eceb" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#536865", fontSize: 12 }} /><YAxis unit=" MB" width={68} axisLine={false} tickLine={false} tick={{ fill: "#748583", fontSize: 11 }} /><Tooltip cursor={{ fill: "#f3f7f6" }} contentStyle={chartTooltipStyle} formatter={(value) => `${Number(value).toFixed(1)} MB`} /><Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={72}><LabelList dataKey="value" position="top" formatter={(value) => `${Number(value).toFixed(1)} MB`} fill="#425653" fontSize={11} />{rows.map((row) => <Cell key={row.name} fill={row.fill} />)}</Bar></BarChart></ResponsiveContainer>;
 }
 
 function CapacityChart({ memory, storage }: { memory: number; storage: number }) {
   const rows = [{ name: "Memory", value: memory / 1024 ** 3, fill: "#6f78e8" }, { name: "Root storage", value: storage / 1024 ** 3, fill: "#f2a51a" }].filter((row) => row.value > 0);
   if (!rows.length) return <ChartEmpty text="Waiting for inventory capacity" />;
-  return <ResponsiveContainer width="100%" height="100%"><BarChart data={rows} margin={{ top: 12, right: 18, left: 4 }}><CartesianGrid stroke="#e9edf5" vertical={false} /><XAxis dataKey="name" axisLine={false} tickLine={false} /><YAxis unit=" GB" axisLine={false} tickLine={false} /><Tooltip formatter={(value) => `${Number(value).toFixed(1)} GB`} /><Bar dataKey="value" radius={[5, 5, 0, 0]}>{rows.map((row) => <Cell key={row.name} fill={row.fill} />)}</Bar></BarChart></ResponsiveContainer>;
+  return <ResponsiveContainer width="100%" height="100%"><BarChart data={rows} margin={{ top: 28, right: 22, left: 2, bottom: 2 }}><CartesianGrid stroke="#e5eceb" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#536865", fontSize: 12 }} /><YAxis unit=" GB" width={62} axisLine={false} tickLine={false} tick={{ fill: "#748583", fontSize: 11 }} /><Tooltip cursor={{ fill: "#f3f7f6" }} contentStyle={chartTooltipStyle} formatter={(value) => `${Number(value).toFixed(1)} GB`} /><Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={72}><LabelList dataKey="value" position="top" formatter={(value) => `${Number(value).toFixed(1)} GB`} fill="#425653" fontSize={11} />{rows.map((row) => <Cell key={row.name} fill={row.fill} />)}</Bar></BarChart></ResponsiveContainer>;
 }
 
-function ActivityChart({ data }: { data: FleetData }) {
-  const rows = [{ name: "Devices", value: data.devices.length, fill: "#2b8ee6" }, { name: "Online", value: data.devices.filter((device) => device.presence === "connected").length, fill: "#21b978" }, { name: "Samples", value: data.metrics.length, fill: "#8b6de9" }, { name: "Jobs", value: data.jobs.length, fill: "#f59e0b" }];
-  return <ResponsiveContainer width="100%" height="100%"><BarChart data={rows} margin={{ top: 10, right: 8, left: -18, bottom: 0 }}><CartesianGrid stroke="#e9edf5" vertical={false} /><XAxis dataKey="name" axisLine={false} tickLine={false} /><YAxis allowDecimals={false} axisLine={false} tickLine={false} /><Tooltip /><Bar dataKey="value" radius={[5, 5, 0, 0]}>{rows.map((row) => <Cell key={row.name} fill={row.fill} />)}</Bar></BarChart></ResponsiveContainer>;
+const chartTooltipStyle: React.CSSProperties = { border: "1px solid #d5e0de", borderRadius: 6, boxShadow: "0 10px 28px rgba(31, 54, 51, .12)", color: "#203431", fontSize: 12 };
+
+const packageBrands: { test: RegExp; icon: SimpleIcon }[] = [
+  { test: /^nginx/i, icon: siNginx }, { test: /^(apache2|httpd)/i, icon: siApache },
+  { test: /^mariadb/i, icon: siMariadb }, { test: /^mysql/i, icon: siMysql }, { test: /^(postgres|libpq)/i, icon: siPostgresql },
+  { test: /^mongo/i, icon: siMongodb }, { test: /^redis/i, icon: siRedis }, { test: /^rabbitmq/i, icon: siRabbitmq },
+  { test: /^(docker|containerd)/i, icon: siDocker }, { test: /^python/i, icon: siPython }, { test: /^git($|-)/i, icon: siGit },
+  { test: /^ubuntu/i, icon: siUbuntu }, { test: /^flatpak/i, icon: siFlatpak }, { test: /^(openssl|libssl)/i, icon: siOpenssl },
+  { test: /^(curl|libcurl)/i, icon: siCurl }, { test: /^(nodejs|node-|npm$)/i, icon: siNodedotjs }, { test: /^anydesk/i, icon: siAnydesk },
+  { test: /^(bash|dash$)/i, icon: siGnubash }, { test: /^(linux|kernel)/i, icon: siLinux }, { test: /^trivy/i, icon: siTrivy },
+];
+
+function PackageBrandIcon({ name }: { name: string }) {
+  const brand = packageBrands.find((entry) => entry.test.test(name))?.icon;
+  if (brand) return <span className="packageBrand" title={brand.title} style={{ color: `#${brand.hex}` }}><svg viewBox="0 0 24 24" role="img" aria-label={`${brand.title} logo`}><path fill="currentColor" d={brand.path} /></svg></span>;
+  const initials = name.split(/[-_.]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "PK";
+  const tone = Array.from(name).reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 5;
+  return <span className={`packageMonogram tone${tone}`} title="System package without an official project logo">{initials}</span>;
 }
+
+function pageExportData(page: PageId, data: FleetData) {
+  const shared = { generated_at: new Date().toISOString(), page, organization: data.organization };
+  switch (page) {
+    case "devices": return { ...shared, devices: data.devices };
+    case "gateways": return { ...shared, gateways: data.devices.filter((device) => device.capabilities?.includes("gateway")), downstream_devices: data.downstream };
+    case "telemetry": case "health": return { ...shared, devices: data.devices, metrics: data.metrics, inventory: data.inventory };
+    case "inventory": case "applications": return { ...shared, devices: data.devices, inventory: data.inventory, applications: data.applications };
+    case "map": return { ...shared, locations: data.devices.map(({ id, display_name, presence, location }) => ({ id, display_name, presence, location })) };
+    case "jobs": return { ...shared, jobs: data.jobs };
+    case "deployments": return { ...shared, deployments: data.deployments };
+    case "ota": return { ...shared, update_campaigns: data.otaCampaigns };
+    case "audit": return { ...shared, audit_events: data.audit };
+    case "users": return { ...shared, users: data.users, roles: data.roles };
+    case "enrollment": return { ...shared, enrollment_tokens: data.enrollmentTokens.map(({ token: _token, ...record }) => record) };
+    default: return { ...shared, devices: data.devices, jobs: data.jobs, alerts: deriveAlerts(data.devices) };
+  }
+}
+
+function canAdminister(membership: Membership) { return ["platform_administrator", "organization_owner", "organization_administrator"].includes(membership.role); }
+function normalizeArchitecture(value?: string) { const normalized = (value || "").toLowerCase(); if (["aarch64", "arm64"].includes(normalized)) return "arm64"; if (["arm", "armv7", "armv7l", "armhf"].includes(normalized)) return "armv7"; if (["amd64", "x86_64"].includes(normalized)) return "amd64"; return normalized; }
+function formatCampaignState(value: string) { return value.replaceAll("canary", "pilot").replaceAll("_", " "); }
 
 function telemetryChart(data: FleetData) { const grouped = new Map<string, { time: string; cpu?: number[]; memory?: number[]; disk?: number[]; temperature?: number[] }>(); data.metrics.forEach((metric) => { const time = new Date(metric.device_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); const point = grouped.get(time) || { time, cpu: [], memory: [], disk: [], temperature: [] }; if (metric.name.includes("cpu.utilization")) point.cpu?.push(metric.value); if (metric.name.includes("memory.utilization")) point.memory?.push(metric.value); if (metric.name.includes("filesystem.utilization")) point.disk?.push(metric.value); if (metric.name.includes("temperature")) point.temperature?.push(metric.value); grouped.set(time, point); }); const points = Array.from(grouped.values()).map((point) => ({ time: point.time, cpu: average(point.cpu), memory: average(point.memory), disk: average(point.disk), temperature: average(point.temperature) })); const step = Math.max(1, Math.ceil(points.length / 180)); return points.filter((_, index) => index % step === 0 || index === points.length - 1); }
 function average(values?: number[]) { return values?.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : undefined; }

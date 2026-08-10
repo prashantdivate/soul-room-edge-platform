@@ -4,8 +4,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/unified-fleet/cloud-infra/internal/config"
-	"github.com/unified-fleet/cloud-infra/internal/storage"
+	"github.com/soul-room/cloud-infra/internal/config"
+	"github.com/soul-room/cloud-infra/internal/storage"
 )
 
 func main() {

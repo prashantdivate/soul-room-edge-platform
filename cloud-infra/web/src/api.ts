@@ -245,6 +245,20 @@ export async function updateDevice(membership: Membership, deviceId: string, pat
   });
 }
 
+export async function deleteDevice(membership: Membership, deviceId: string): Promise<void> {
+	await request<{ status: string }>(`/api/v1/devices?device_id=${encodeURIComponent(deviceId)}`, {
+		method: "DELETE",
+		headers: { "X-Tenant-ID": membership.tenant_id },
+	});
+}
+
+export async function deleteJob(membership: Membership, jobId: string): Promise<void> {
+	await request<{ status: string }>(`/api/v1/jobs?job_id=${encodeURIComponent(jobId)}`, {
+		method: "DELETE",
+		headers: { "X-Tenant-ID": membership.tenant_id },
+	});
+}
+
 export async function createRemoteAccess(membership: Membership, deviceId: string, user: string): Promise<{ provider: string; launch_url: string; ssh_command: string }> {
   return request("/api/v1/remote-access", {
     method: "POST",
@@ -285,6 +299,30 @@ export function exportJson(filename: string, value: unknown) {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+export async function exportPdf(filename: string, element: HTMLElement) {
+	const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+	element.classList.add("pdfExporting");
+	try {
+		const canvas = await html2canvas(element, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
+		const orientation = canvas.width > canvas.height ? "landscape" : "portrait";
+		const pdf = new jsPDF({ orientation, unit: "mm", format: "a4", compress: true });
+		const margin = 8;
+		const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+		const pageHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+		const imageHeight = canvas.height * pageWidth / canvas.width;
+		const image = canvas.toDataURL("image/jpeg", 0.92);
+		let offset = 0;
+		do {
+			if (offset > 0) pdf.addPage();
+			pdf.addImage(image, "JPEG", margin, margin - offset, pageWidth, imageHeight, undefined, "FAST");
+			offset += pageHeight;
+		} while (offset < imageHeight);
+		pdf.save(filename);
+	} finally {
+		element.classList.remove("pdfExporting");
+	}
 }
 
 export { ApiError };

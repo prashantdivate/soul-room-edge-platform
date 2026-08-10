@@ -3,7 +3,7 @@ package telemetry
 import (
 	"testing"
 
-	"github.com/unified-fleet/cloud-infra/internal/protocol"
+	"github.com/soul-room/cloud-infra/internal/protocol"
 )
 
 func TestNormalizeRejectsHighCardinality(t *testing.T) {

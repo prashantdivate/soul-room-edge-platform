@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/unified-fleet/edge-agent/internal/agent"
-	"github.com/unified-fleet/edge-agent/internal/config"
-	"github.com/unified-fleet/edge-agent/internal/diagnostics"
-	"github.com/unified-fleet/edge-agent/internal/enrollment"
-	"github.com/unified-fleet/edge-agent/internal/identity"
-	"github.com/unified-fleet/edge-agent/internal/storage"
-	"github.com/unified-fleet/edge-agent/internal/telemetry"
+	"github.com/soul-room/edge-agent/internal/agent"
+	"github.com/soul-room/edge-agent/internal/config"
+	"github.com/soul-room/edge-agent/internal/diagnostics"
+	"github.com/soul-room/edge-agent/internal/enrollment"
+	"github.com/soul-room/edge-agent/internal/identity"
+	"github.com/soul-room/edge-agent/internal/storage"
+	"github.com/soul-room/edge-agent/internal/telemetry"
 )
 
 func main() {

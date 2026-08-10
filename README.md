@@ -1,15 +1,15 @@
 <div align="center">
-  <img src="./cloud-infra/web/public/axon-mark.svg" width="76" alt="Axon logo">
-  <h1>Axon</h1>
+  <img src="./cloud-infra/web/public/soul-room-mark.svg" width="76" alt="Soul Room logo">
+  <h1>Soul Room</h1>
   <p><strong>Open edge-fleet operations for Linux devices, gateways, and the software they run.</strong></p>
 </div>
 
-Axon joins a lightweight Linux agent with a tenant-aware control plane and a
-focused operations console. It is designed for Raspberry Pi, Yocto devices,
-industrial gateways, and general embedded Linux fleets without binding the
+Soul Room joins a lightweight Linux agent with a tenant-aware control plane and a
+focused operations console. It is designed for Yocto devices, industrial
+gateways, single-board computers, and general embedded Linux fleets without binding the
 operator workflow to Windows, Linux, or macOS.
 
-> Axon is an implemented MVP foundation. It is suitable for evaluation and
+> Soul Room is an implemented MVP foundation. It is suitable for evaluation and
 > continued product engineering, but it is not yet a claim of audited,
 > production-certified fleet infrastructure.
 
@@ -19,12 +19,12 @@ operator workflow to Windows, Linux, or macOS.
 | --- | --- |
 | Fleet visibility | Real enrollment, device presence, hardware/OS inventory, telemetry, downstream gateways, and actual device locations |
 | Operations | Typed jobs, offline delivery queue, diagnostics, bounded log collection, and ShellHub launch integration |
-| Updates | Signed OS release plans, canary-first Flatpak updates, exact OSTree commit pinning, and self-hosted `.flatpakrepo` descriptors |
+| Updates | Signed OS release plans for arm64/aarch64 and armv7, pilot-first Flatpak updates, exact OSTree commit pinning, and self-hosted `.flatpakrepo` descriptors |
 | Software posture | Installed Debian/RPM package inventory and optional Trivy-backed OS vulnerability advisory scans |
 | Governance | Tenant isolation, built-in RBAC, team-user creation, server-side sessions, and append-oriented audit activity |
 | Platform | One Docker Compose command, PostgreSQL, MinIO, Mailpit, local durable state, backup/restore profiles, Helm and Terraform foundations |
 
-Axon does not generate demo fleet data. Empty screens remain empty until a real
+Soul Room does not generate demo fleet data. Empty screens remain empty until a real
 agent reports data.
 
 ## Architecture
@@ -32,13 +32,13 @@ agent reports data.
 ```mermaid
 flowchart LR
     subgraph Edge["Linux edge device"]
-        A["Axon agent"]
+        A["Soul Room agent"]
         I["Inventory and telemetry"]
         J["Typed job handlers"]
         A --- I
         A --- J
     end
-    subgraph Control["Axon control plane"]
+    subgraph Control["Soul Room control plane"]
         G["mTLS device gateway"]
         API["Tenant-aware API"]
         S["Durable state"]
@@ -83,15 +83,19 @@ docker compose -f cloud-infra/compose.yaml down
 See [local platform setup](./cloud-infra/docs/RUNNING_LOCALLY.md) for addresses,
 physical-device networking, logs, backup, and restore.
 
-## Connect A Raspberry Pi
+## Connect An Embedded Linux Device
 
-Build an ARM64 installation bundle on any Docker host:
+Build the installation bundle that matches the device on any Docker host:
 
 ```bash
-docker build --target raspberry-pi --output type=local,dest=agent/dist/raspberry-pi agent
+# 64-bit ARM: aarch64 / arm64
+docker build --target embedded-linux-arm64 --output type=local,dest=agent/dist/embedded-linux-arm64 agent
+
+# 32-bit ARM: armv7 / armhf
+docker build --target embedded-linux-armv7 --output type=local,dest=agent/dist/embedded-linux-armv7 agent
 ```
 
-On the device, use `/opt/unified-fleet-agent` as the temporary project staging
+On the device, use `/opt/soul-room-agent` as the temporary project staging
 directory. Installed runtime paths are:
 
 ```text
@@ -106,7 +110,7 @@ Generate a token and download the development CA from **Enrollment**, then use
 the exact command shape below. Flags after `enroll` belong to that subcommand:
 
 ```bash
-sudo edge-agentctl -config /etc/edge-agent/config.yaml enroll -token YOUR_TOKEN -name raspberry-pi
+sudo edge-agentctl -config /etc/edge-agent/config.yaml enroll -token YOUR_TOKEN -name embedded-linux-arm64
 sudo systemctl daemon-reload
 sudo systemctl enable --now edge-agent
 sudo journalctl -u edge-agent -f
@@ -114,7 +118,7 @@ sudo journalctl -u edge-agent -f
 
 The service runs in the system service context and does not create or require a
 dedicated Linux account. Follow the complete
-[Raspberry Pi installation guide](./agent/docs/INSTALLATION.md) or the
+[embedded Linux installation guide](./agent/docs/EMBEDDED_LINUX_INSTALLATION.md) or the
 [Yocto/i.MX8MP guide](./agent/docs/RUNNING_ON_YOCTO_IMX8MP.md).
 
 ## Self-Hosted Flatpak Updates
@@ -123,7 +127,7 @@ An update campaign can either use a system remote already configured on the
 device or accept your own HTTPS `.flatpakrepo` descriptor URL. When a descriptor
 is supplied, the agent adds it as a system remote before validating the
 application reference and optional pinned commit. GPG verification remains
-enabled; Axon does not use `--no-gpg-verify`.
+enabled; Soul Room does not use `--no-gpg-verify`.
 
 Example campaign inputs:
 
@@ -134,8 +138,10 @@ Application reference: com.example.Kiosk
 OSTree commit: optional 64-character commit
 ```
 
-Rollouts begin with the configured canary group and require promotion before
-the remaining devices are queued.
+Rollouts begin with the configured pilot group and require promotion before the
+remaining devices are queued. The API field remains `canary_percent` for
+protocol compatibility; the console uses the clearer operator term "pilot
+group."
 
 ## Package And CVE Posture
 
@@ -144,7 +150,7 @@ Agents report installed Debian or RPM packages as inventory. If
 installed on a device, it also reports `security:trivy`; an operator can then
 queue an OS-package advisory scan from **Applications**.
 
-Axon shows the scanner, scan time, advisory severity, affected package,
+Soul Room shows the scanner, scan time, advisory severity, affected package,
 installed version, and available fixed version. These are advisory matches, not
 an automatic declaration that a device is exploitable or unsuitable for
 production. Operators should consider package use and exposure before acting.
@@ -155,6 +161,12 @@ production. Operators should consider package use and exposure before acting.
 agent/          Go edge agent, CLI, packaging, Yocto material, and device docs
 cloud-infra/    Go control plane, React console, Compose, Helm, Terraform, docs
 ```
+
+Keep the agent and cloud in this one repository while their enrollment, job,
+telemetry, and update contracts evolve together. Each directory has its own
+Dockerfile, tests, documentation, and release surface, so it can be split into a
+dedicated repository later without changing the code layout. The root README is
+the end-to-end entry point; component READMEs remain independently usable.
 
 Useful deeper documentation:
 
@@ -176,6 +188,24 @@ docker compose -f cloud-infra/compose.yaml config
 The React production build is executed by the web image build. Keep secrets,
 private keys, generated device identity, data volumes, and vulnerability reports
 out of source control.
+
+## Local Data Hygiene
+
+Compose stores device registrations, events, certificates, object data, and
+database state in named Docker volumes. Local `.env` files, backups, generated
+agent state, certificates, and file-backed control-plane stores are ignored by
+Git. A fresh clone starts with only the local administrator and organization;
+it contains no devices, telemetry, jobs, or events from another installation.
+
+To intentionally erase a local installation and return to that clean state:
+
+```bash
+docker compose -f cloud-infra/compose.yaml down -v
+docker compose -f cloud-infra/compose.yaml up --build -d
+```
+
+The first command permanently removes the local Compose volumes, so use the
+maintenance backup profile first when the data matters.
 
 ## Product Direction
 

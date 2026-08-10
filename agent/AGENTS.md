@@ -1,6 +1,6 @@
 # Repository Guidance
 
-This repository contains the Linux edge-device agent for Unified Fleet Management.
+This repository contains the Linux edge-device agent for Soul Room.
 
 Security-sensitive code paths live in `internal/identity`, `internal/enrollment`,
 `internal/transport`, `internal/jobs`, `internal/applications`, and

@@ -8,11 +8,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/unified-fleet/cloud-infra/internal/certificates"
-	"github.com/unified-fleet/cloud-infra/internal/model"
-	"github.com/unified-fleet/cloud-infra/internal/protocol"
-	"github.com/unified-fleet/cloud-infra/internal/storage"
-	"github.com/unified-fleet/cloud-infra/internal/tenancy"
+	"github.com/soul-room/cloud-infra/internal/certificates"
+	"github.com/soul-room/cloud-infra/internal/model"
+	"github.com/soul-room/cloud-infra/internal/protocol"
+	"github.com/soul-room/cloud-infra/internal/storage"
+	"github.com/soul-room/cloud-infra/internal/tenancy"
 )
 
 type Service struct {

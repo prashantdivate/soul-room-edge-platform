@@ -63,6 +63,9 @@ func ValidateMetadata(c Campaign) error {
 	if c.ArtifactURL == "" || c.Digest == "" || c.Signature == "" {
 		return errors.New("OTA metadata requires name, artifact URL, version, digest, and signature")
 	}
+	if !supportedArchitecture(c.Architecture) {
+		return errors.New("OTA architecture must be arm64/aarch64, armv7, or amd64")
+	}
 	if c.Adapter != "mender" && c.Adapter != "rauc" && c.Adapter != "ostree" {
 		return errors.New("update adapter must be mender, rauc, ostree, or flatpak")
 	}
@@ -75,6 +78,15 @@ func ValidateMetadata(c Campaign) error {
 		return errors.New("OTA digest must be a SHA-256 value")
 	}
 	return validateRollout(c)
+}
+
+func supportedArchitecture(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "arm64", "aarch64", "armv7", "armv7l", "armhf", "amd64", "x86_64":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateRollout(c Campaign) error {

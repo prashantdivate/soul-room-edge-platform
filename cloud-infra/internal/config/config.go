@@ -21,16 +21,16 @@ type Config struct {
 
 func Load() Config {
 	return Config{
-		HTTPAddr:         getenv("UFM_HTTP_ADDR", "127.0.0.1:8080"),
-		DeviceAddr:       getenv("UFM_DEVICE_ADDR", "127.0.0.1:8443"),
-		DevicePublicHost: getenv("UFM_DEVICE_PUBLIC_HOST", "localhost"),
-		StorePath:        getenv("UFM_STORE_PATH", ".ufm/control-plane.json"),
-		DevCADir:         getenv("UFM_DEV_CA_DIR", ".ufm/ca"),
-		SessionTTL:       duration("UFM_SESSION_TTL", 12*time.Hour),
-		CertificateTTL:   duration("UFM_CERTIFICATE_TTL", 90*24*time.Hour),
-		SignupEnabled:    getenv("UFM_SIGNUP_ENABLED", "false") == "true",
-		MaxPayloadBytes:  int64(integer("UFM_MAX_PAYLOAD_BYTES", 2*1024*1024)),
-		ShellHubURL:      getenv("UFM_SHELLHUB_URL", ""),
+		HTTPAddr:         getenv("SOULROOM_HTTP_ADDR", "127.0.0.1:8080"),
+		DeviceAddr:       getenv("SOULROOM_DEVICE_ADDR", "127.0.0.1:8443"),
+		DevicePublicHost: getenv("SOULROOM_DEVICE_PUBLIC_HOST", "localhost"),
+		StorePath:        getenv("SOULROOM_STORE_PATH", ".soul-room/control-plane.json"),
+		DevCADir:         getenv("SOULROOM_DEV_CA_DIR", ".soul-room/ca"),
+		SessionTTL:       duration("SOULROOM_SESSION_TTL", 12*time.Hour),
+		CertificateTTL:   duration("SOULROOM_CERTIFICATE_TTL", 90*24*time.Hour),
+		SignupEnabled:    getenv("SOULROOM_SIGNUP_ENABLED", "false") == "true",
+		MaxPayloadBytes:  int64(integer("SOULROOM_MAX_PAYLOAD_BYTES", 2*1024*1024)),
+		ShellHubURL:      getenv("SOULROOM_SHELLHUB_URL", ""),
 	}
 }
 

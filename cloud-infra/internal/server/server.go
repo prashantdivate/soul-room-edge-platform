@@ -11,20 +11,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unified-fleet/cloud-infra/internal/audit"
-	"github.com/unified-fleet/cloud-infra/internal/auth"
-	"github.com/unified-fleet/cloud-infra/internal/certificates"
-	"github.com/unified-fleet/cloud-infra/internal/config"
-	"github.com/unified-fleet/cloud-infra/internal/enrollment"
-	"github.com/unified-fleet/cloud-infra/internal/jobs"
-	"github.com/unified-fleet/cloud-infra/internal/model"
-	"github.com/unified-fleet/cloud-infra/internal/observability"
-	"github.com/unified-fleet/cloud-infra/internal/ota"
-	"github.com/unified-fleet/cloud-infra/internal/protocol"
-	"github.com/unified-fleet/cloud-infra/internal/rbac"
-	"github.com/unified-fleet/cloud-infra/internal/storage"
-	"github.com/unified-fleet/cloud-infra/internal/telemetry"
-	"github.com/unified-fleet/cloud-infra/internal/tenancy"
+	"github.com/soul-room/cloud-infra/internal/audit"
+	"github.com/soul-room/cloud-infra/internal/auth"
+	"github.com/soul-room/cloud-infra/internal/certificates"
+	"github.com/soul-room/cloud-infra/internal/config"
+	"github.com/soul-room/cloud-infra/internal/enrollment"
+	"github.com/soul-room/cloud-infra/internal/jobs"
+	"github.com/soul-room/cloud-infra/internal/model"
+	"github.com/soul-room/cloud-infra/internal/observability"
+	"github.com/soul-room/cloud-infra/internal/ota"
+	"github.com/soul-room/cloud-infra/internal/protocol"
+	"github.com/soul-room/cloud-infra/internal/rbac"
+	"github.com/soul-room/cloud-infra/internal/storage"
+	"github.com/soul-room/cloud-infra/internal/telemetry"
+	"github.com/soul-room/cloud-infra/internal/tenancy"
 )
 
 type Server struct {
@@ -71,7 +71,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: "ufm_session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0)})
+	http.SetCookie(w, &http.Cookie{Name: "soul_room_session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0)})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "signed_out"})
 }
 
@@ -144,7 +144,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusInternalServerError, "session_error", "could not save session")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: "ufm_session", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: session.ExpiresAt})
+	http.SetCookie(w, &http.Cookie{Name: "soul_room_session", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: session.ExpiresAt})
 	writeJSON(w, http.StatusOK, map[string]any{"session_expires_at": session.ExpiresAt, "memberships": s.Store.Memberships(user.ID)})
 }
 
@@ -152,7 +152,7 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := bearer(r.Header.Get("Authorization"))
 		if token == "" {
-			if c, err := r.Cookie("ufm_session"); err == nil {
+			if c, err := r.Cookie("soul_room_session"); err == nil {
 				token = c.Value
 			}
 		}
@@ -251,6 +251,24 @@ func (s *Server) devices(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"devices": s.Store.ListDevices(tc)})
 		return
 	}
+	if r.Method == http.MethodDelete {
+		if err := rbac.Authorize(r.Context(), rbac.DeviceDelete); err != nil {
+			errorJSON(w, http.StatusForbidden, "forbidden", "permission denied")
+			return
+		}
+		deviceID := strings.TrimSpace(r.URL.Query().Get("device_id"))
+		if deviceID == "" {
+			errorJSON(w, http.StatusBadRequest, "bad_request", "device_id is required")
+			return
+		}
+		if err := s.Store.DeleteDevice(tc, deviceID); err != nil {
+			errorJSON(w, http.StatusBadRequest, "device_delete_failed", err.Error())
+			return
+		}
+		audit.Record(s.Store, tc, "device.removed", "device", deviceID, "success", nil)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "removed", "device_id": deviceID})
+		return
+	}
 	if r.Method != http.MethodPatch {
 		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -326,7 +344,7 @@ func (s *Server) otaCampaigns(w http.ResponseWriter, r *http.Request) {
 			errorJSON(w, http.StatusBadRequest, "invalid_target", "campaign contains an unknown device")
 			return
 		}
-		if campaign.Architecture != "" && device.Architecture != "" && campaign.Architecture != device.Architecture {
+		if campaign.Architecture != "" && device.Architecture != "" && canonicalArchitecture(campaign.Architecture) != canonicalArchitecture(device.Architecture) {
 			errorJSON(w, http.StatusBadRequest, "incompatible_target", "campaign architecture does not match every target")
 			return
 		}
@@ -365,6 +383,19 @@ func (s *Server) otaCampaigns(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Record(s.Store, tc, "ota_campaign.created", "ota_campaign", created.ID, "success", map[string]string{"adapter": created.Adapter, "targets": boolString(len(created.TargetIDs) > 0)})
 	writeJSON(w, http.StatusCreated, created)
+}
+
+func canonicalArchitecture(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "arm64", "aarch64":
+		return "arm64"
+	case "arm", "armv7", "armv7l", "armhf":
+		return "armv7"
+	case "amd64", "x86_64":
+		return "amd64"
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
 }
 
 func (s *Server) promoteOTACampaign(w http.ResponseWriter, r *http.Request, tc tenancy.Context) {
@@ -494,6 +525,25 @@ func (s *Server) jobs(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"jobs": s.Store.ListJobs(tc)})
 		return
 	}
+	if r.Method == http.MethodDelete {
+		if err := rbac.Authorize(r.Context(), rbac.JobDelete); err != nil {
+			errorJSON(w, http.StatusForbidden, "forbidden", "permission denied")
+			return
+		}
+		tc, _ := tenancy.Require(r.Context())
+		jobID := strings.TrimSpace(r.URL.Query().Get("job_id"))
+		if jobID == "" {
+			errorJSON(w, http.StatusBadRequest, "bad_request", "job_id is required")
+			return
+		}
+		if err := s.Store.DeleteJob(tc, jobID); err != nil {
+			errorJSON(w, http.StatusConflict, "job_delete_failed", err.Error())
+			return
+		}
+		audit.Record(s.Store, tc, "job.history_removed", "job", jobID, "success", nil)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "removed", "job_id": jobID})
+		return
+	}
 	if r.Method != http.MethodPost {
 		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -618,7 +668,7 @@ func (s *Server) devCA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-pem-file")
-	w.Header().Set("Content-Disposition", `attachment; filename="unified-fleet-dev-ca.pem"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="soul-room-dev-ca.pem"`)
 	_, _ = w.Write(s.CA.CertPEM)
 }
 

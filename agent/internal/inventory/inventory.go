@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/unified-fleet/edge-agent/internal/identity"
+	"github.com/soul-room/edge-agent/internal/identity"
 )
 
 type InstalledPackage struct {

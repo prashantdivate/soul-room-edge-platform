@@ -25,5 +25,5 @@ func Healthz(w http.ResponseWriter, r *http.Request) {
 
 func Metrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	_, _ = w.Write([]byte("# HELP ufm_up Service health\n# TYPE ufm_up gauge\nufm_up 1\n"))
+	_, _ = w.Write([]byte("# HELP soul_room_up Service health\n# TYPE soul_room_up gauge\nsoul_room_up 1\n"))
 }

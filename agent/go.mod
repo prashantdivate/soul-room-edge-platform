@@ -1,3 +1,3 @@
-module github.com/unified-fleet/edge-agent
+module github.com/soul-room/edge-agent
 
 go 1.22

@@ -3,12 +3,12 @@ package applications
 import "testing"
 
 func TestParseFlatpakUpdate(t *testing.T) {
-	payload := []byte(`{"campaign_id":"ota-1","ref":"org.example.Axon","remote":"factory","commit":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","repository_url":"https://updates.example.test/factory.flatpakrepo"}`)
+	payload := []byte(`{"campaign_id":"ota-1","ref":"org.soulroom.Console","remote":"factory","commit":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","repository_url":"https://updates.example.test/factory.flatpakrepo"}`)
 	update, err := ParseFlatpakUpdate(payload)
 	if err != nil {
 		t.Fatalf("valid update rejected: %v", err)
 	}
-	if update.Ref != "org.example.Axon" || update.Remote != "factory" {
+	if update.Ref != "org.soulroom.Console" || update.Remote != "factory" {
 		t.Fatalf("unexpected update: %+v", update)
 	}
 	if update.RepositoryURL == "" {

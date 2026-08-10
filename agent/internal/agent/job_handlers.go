@@ -6,10 +6,10 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/unified-fleet/edge-agent/internal/applications"
-	"github.com/unified-fleet/edge-agent/internal/inventory"
-	"github.com/unified-fleet/edge-agent/internal/jobs"
-	"github.com/unified-fleet/edge-agent/internal/securityscan"
+	"github.com/soul-room/edge-agent/internal/applications"
+	"github.com/soul-room/edge-agent/internal/inventory"
+	"github.com/soul-room/edge-agent/internal/jobs"
+	"github.com/soul-room/edge-agent/internal/securityscan"
 )
 
 func newJobRegistry(a *Agent) *jobs.Registry {

@@ -3,7 +3,7 @@ package heartbeat
 import (
 	"time"
 
-	"github.com/unified-fleet/edge-agent/internal/protocol"
+	"github.com/soul-room/edge-agent/internal/protocol"
 )
 
 var started = time.Now()

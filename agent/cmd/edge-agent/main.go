@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/unified-fleet/edge-agent/internal/agent"
-	"github.com/unified-fleet/edge-agent/internal/config"
+	"github.com/soul-room/edge-agent/internal/agent"
+	"github.com/soul-room/edge-agent/internal/config"
 )
 
 func main() {

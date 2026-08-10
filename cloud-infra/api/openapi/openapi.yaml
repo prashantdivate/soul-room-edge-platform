@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Unified Fleet Control Plane API
+  title: Soul Room Control Plane API
   version: 0.1.0
 servers:
   - url: /api/v1
@@ -25,6 +25,11 @@ paths:
       summary: List tenant users
       responses:
         "200": { description: Users }
+    post:
+      summary: Create a tenant user with a built-in role
+      responses:
+        "201": { description: User created }
+        "403": { description: Administrative role required }
   /roles:
     get:
       summary: List roles and permissions
@@ -47,6 +52,17 @@ paths:
           schema: { type: integer, minimum: 1, maximum: 200 }
       responses:
         "200": { description: Devices }
+    delete:
+      summary: Remove a registered device and its operational records
+      parameters:
+        - name: device_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Device removed; audit history retained }
+        "403": { description: Administrative role required }
+        "404": { description: Device not found }
   /devices/{device_id}:
     get:
       summary: Get device detail
@@ -71,6 +87,16 @@ paths:
       summary: Create typed job
       responses:
         "201": { description: Job created }
+    delete:
+      summary: Remove a terminal job history entry
+      parameters:
+        - name: job_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Job history removed; audit history retained }
+        "409": { description: Job has not reached a terminal state }
   /deployments:
     get:
       summary: List deployments
@@ -106,7 +132,7 @@ components:
     SessionCookie:
       type: apiKey
       in: cookie
-      name: ufm_session
+      name: soul_room_session
     BearerToken:
       type: http
       scheme: bearer

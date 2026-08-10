@@ -1,17 +1,17 @@
 image:
-  repository: unified-fleet/control-plane
+  repository: soul-room/control-plane
   tag: "0.1.0"
   pullPolicy: IfNotPresent
 
 postgres:
   external:
     enabled: true
-    dsnSecretName: unified-fleet-postgres
+    dsnSecretName: soul-room-postgres
 
 s3:
   external:
     enabled: true
-    endpointSecretName: unified-fleet-s3
+    endpointSecretName: soul-room-s3
 
 ingress:
   enabled: true

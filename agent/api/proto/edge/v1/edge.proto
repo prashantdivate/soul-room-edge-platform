@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package edge.v1;
+
+option go_package = "github.com/unified-fleet/edge-agent/api/edge/v1;edgev1";
+
+message Envelope {
+  string protocol_version = 1;
+  string message_id = 2;
+  string tenant_id = 3;
+  string device_id = 4;
+  string parent_gateway_id = 5;
+  uint64 sequence = 6;
+  int64 created_unix_nano = 7;
+  string payload_schema_version = 8;
+  string payload_digest = 9;
+  bytes payload = 10;
+}
+
+message EnrollmentRequest {
+  string token = 1;
+  bytes public_key = 2;
+  string requested_name = 3;
+  DeviceFingerprint fingerprint = 4;
+}
+
+message EnrollmentResponse {
+  string tenant_id = 1;
+  string device_id = 2;
+  bytes client_certificate_pem = 3;
+  bytes ca_certificate_pem = 4;
+  string server_endpoint = 5;
+}
+
+message DeviceFingerprint {
+  string hostname = 1;
+  string machine_id_hash = 2;
+  string architecture = 3;
+  string os = 4;
+  string kernel = 5;
+}
+
+message Heartbeat {
+  string agent_version = 1;
+  string health = 2;
+  int64 uptime_seconds = 3;
+}
+
+message TelemetryBatch {
+  repeated Metric metrics = 1;
+}
+
+message Metric {
+  string name = 1;
+  double value = 2;
+  string unit = 3;
+  map<string, string> labels = 4;
+  int64 time_unix_nano = 5;
+}
+
+message Job {
+  string job_id = 1;
+  string tenant_id = 2;
+  string device_id = 3;
+  string type = 4;
+  int64 created_unix_nano = 5;
+  int64 expires_unix_nano = 6;
+  uint32 attempt = 7;
+  string payload_digest = 8;
+  repeated string scopes = 9;
+  bytes payload = 10;
+}
+
+message JobResult {
+  string job_id = 1;
+  string state = 2;
+  int32 exit_code = 3;
+  string stdout = 4;
+  string stderr = 5;
+  string error_class = 6;
+  int64 started_unix_nano = 7;
+  int64 finished_unix_nano = 8;
+}

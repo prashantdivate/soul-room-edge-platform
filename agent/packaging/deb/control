@@ -1,0 +1,9 @@
+Package: edge-agent
+Version: 0.1.0
+Section: admin
+Priority: optional
+Architecture: amd64
+Maintainer: Unified Fleet contributors <maintainers@example.invalid>
+Description: Secure Linux edge device management agent
+ Device-side agent for enrollment, telemetry, inventory, typed jobs,
+ controlled deployment, container policy, OTA adapters, and gateway connectors.

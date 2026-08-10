@@ -1,0 +1,29 @@
+# Dependencies and generated builds
+**/node_modules/
+**/dist/
+agent/build/
+*.exe
+*.test
+coverage/
+
+# Runtime state and local configuration
+.env
+.env.*
+!.env.example
+**/.ufm/
+**/*.db
+**/backups/
+**/control-plane.json
+
+# Never commit credentials or device identity
+*.pem
+*.key
+*.p12
+*.crt
+
+# Editor and operating-system noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

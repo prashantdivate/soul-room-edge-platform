@@ -1,0 +1,23 @@
+[Unit]
+Description=Axon Edge Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/edge-agent -config /etc/edge-agent/config.yaml
+Restart=always
+RestartSec=5s
+StateDirectory=edge-agent
+RuntimeDirectory=edge-agent
+ConfigurationDirectory=edge-agent
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/edge-agent /run/edge-agent -/var/lib/flatpak
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

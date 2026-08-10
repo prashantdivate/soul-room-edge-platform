@@ -1,0 +1,39 @@
+version: 1
+server:
+  endpoint: https://127.0.0.1:9443
+  ca_file: .dev-control-plane/ca.pem
+  connect_timeout: 15s
+identity:
+  state_dir: .edge-agent/identity
+  use_tpm: false
+storage:
+  state_dir: .edge-agent
+  max_queue_bytes: 104857600
+  max_queue_age: 168h
+telemetry:
+  interval: 60s
+  jitter: 10s
+  collectors:
+    cpu: true
+    memory: true
+    disk: true
+    network: true
+    uptime: true
+    os: true
+    processes: false
+jobs:
+  max_concurrent: 2
+  default_timeout: 10m
+  allow_shell: false
+containers:
+  provider: docker
+  socket: unix:///var/run/docker.sock
+gateway:
+  enabled: true
+  connector_dir: /etc/edge-agent/connectors.d
+location:
+  source: disabled
+  latitude: 0
+  longitude: 0
+  label: ""
+  gpsd_address: 127.0.0.1:2947

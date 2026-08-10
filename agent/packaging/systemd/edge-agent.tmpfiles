@@ -1,0 +1,3 @@
+d /run/edge-agent 0750 edge-agent edge-agent -
+d /var/lib/edge-agent 0750 edge-agent edge-agent -
+d /var/lib/edge-agent/identity 0700 edge-agent edge-agent -

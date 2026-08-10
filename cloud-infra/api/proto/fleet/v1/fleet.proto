@@ -1,0 +1,176 @@
+syntax = "proto3";
+
+package fleet.v1;
+
+option go_package = "github.com/unified-fleet/cloud-infra/api/fleet/v1;fleetv1";
+
+message Envelope {
+  string protocol_version = 1;
+  string message_id = 2;
+  string correlation_id = 3;
+  string tenant_id = 4;
+  string device_id = 5;
+  string gateway_id = 6;
+  uint64 sequence = 7;
+  int64 timestamp_unix_nano = 8;
+  string payload_schema_version = 9;
+  string payload_digest = 10;
+  bytes payload = 11;
+}
+
+message EnrollmentRequest {
+  string enrollment_token = 1;
+  string requested_name = 2;
+  bytes public_key_pem = 3;
+  DeviceFingerprint fingerprint = 4;
+  InventoryReport inventory = 5;
+}
+
+message EnrollmentResponse {
+  string tenant_id = 1;
+  string device_id = 2;
+  bytes client_certificate_pem = 3;
+  bytes ca_certificate_pem = 4;
+  string server_endpoint = 5;
+  DeviceConfiguration configuration = 6;
+}
+
+message DeviceFingerprint {
+  string hostname = 1;
+  string machine_id_hash = 2;
+  string serial = 3;
+  string product = 4;
+  string architecture = 5;
+  string os = 6;
+  string kernel = 7;
+}
+
+message DeviceHello {
+  repeated string supported_protocol_versions = 1;
+  string agent_version = 2;
+  repeated string capabilities = 3;
+}
+
+message Heartbeat {
+  string health = 1;
+  int64 os_uptime_seconds = 2;
+  int64 agent_uptime_seconds = 3;
+}
+
+message TelemetryBatch {
+  repeated Metric metrics = 1;
+  bool compressed = 2;
+}
+
+message Metric {
+  string name = 1;
+  double value = 2;
+  string unit = 3;
+  map<string, string> labels = 4;
+  int64 device_time_unix_nano = 5;
+}
+
+message TelemetryAck {
+  string message_id = 1;
+  uint32 accepted = 2;
+  uint32 rejected = 3;
+}
+
+message InventoryReport {
+  string schema_version = 1;
+  bytes json_payload = 2;
+}
+
+message JobEnvelope {
+  string job_id = 1;
+  string deployment_id = 2;
+  string type = 3;
+  bytes payload = 4;
+  string payload_digest = 5;
+  int64 created_unix_nano = 6;
+  int64 expires_unix_nano = 7;
+  uint32 attempt = 8;
+  repeated string scopes = 9;
+}
+
+message JobAck {
+  string job_id = 1;
+  string state = 2;
+  string reason = 3;
+}
+
+message JobProgress {
+  string job_id = 1;
+  string state = 2;
+  string message = 3;
+  int64 timestamp_unix_nano = 4;
+}
+
+message JobResult {
+  string job_id = 1;
+  string state = 2;
+  int32 exit_code = 3;
+  string stdout = 4;
+  string stderr = 5;
+  string error_class = 6;
+}
+
+message DeploymentState {
+  string deployment_id = 1;
+  string state = 2;
+}
+
+message ContainerState {
+  string container_id = 1;
+  string image = 2;
+  string image_digest = 3;
+  string state = 4;
+  string health = 5;
+  bool managed = 6;
+}
+
+message OTAState {
+  string campaign_id = 1;
+  string artifact_id = 2;
+  string version = 3;
+  string state = 4;
+  string rollback_state = 5;
+}
+
+message DownstreamDevice {
+  string device_id = 1;
+  string parent_gateway_id = 2;
+  string connector_type = 3;
+  string protocol_address = 4;
+  string model = 5;
+  string serial = 6;
+  string firmware_version = 7;
+  string health = 8;
+  repeated string capabilities = 9;
+  repeated string approved_commands = 10;
+}
+
+message ConnectorHealth {
+  string connector_type = 1;
+  string state = 2;
+  string message = 3;
+}
+
+message DeviceConfiguration {
+  string config_version = 1;
+  uint32 telemetry_interval_seconds = 2;
+  repeated string allowed_job_types = 3;
+}
+
+message CertificateRotation {
+  string request_id = 1;
+  int64 expires_unix_nano = 2;
+  bytes new_certificate_pem = 3;
+}
+
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+  string correlation_id = 3;
+  bool retryable = 4;
+}

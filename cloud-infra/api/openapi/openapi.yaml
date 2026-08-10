@@ -1,0 +1,112 @@
+openapi: 3.1.0
+info:
+  title: Unified Fleet Control Plane API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+paths:
+  /auth/login:
+    post:
+      summary: Create a server-side session
+      responses:
+        "200": { description: Login accepted }
+        "401": { description: Invalid credentials }
+  /organizations:
+    get:
+      summary: List organizations visible to the caller
+      responses:
+        "200": { description: Organizations }
+    post:
+      summary: Create an organization
+      responses:
+        "201": { description: Organization created }
+  /users:
+    get:
+      summary: List tenant users
+      responses:
+        "200": { description: Users }
+  /roles:
+    get:
+      summary: List roles and permissions
+      responses:
+        "200": { description: Roles }
+  /enrollment-tokens:
+    post:
+      summary: Create a one-time enrollment token
+      responses:
+        "201": { description: Token created }
+  /devices:
+    get:
+      summary: List devices
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200 }
+      responses:
+        "200": { description: Devices }
+  /devices/{device_id}:
+    get:
+      summary: Get device detail
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Device }
+  /telemetry:
+    get:
+      summary: Query telemetry
+      responses:
+        "200": { description: Telemetry samples }
+  /jobs:
+    get:
+      summary: List jobs
+      responses:
+        "200": { description: Jobs }
+    post:
+      summary: Create typed job
+      responses:
+        "201": { description: Job created }
+  /deployments:
+    get:
+      summary: List deployments
+      responses:
+        "200": { description: Deployments }
+  /applications:
+    get:
+      summary: List applications
+      responses:
+        "200": { description: Applications }
+  /artifacts:
+    get:
+      summary: List artifacts
+      responses:
+        "200": { description: Artifacts }
+  /ota:
+    get:
+      summary: List OTA campaigns
+      responses:
+        "200": { description: OTA campaigns }
+  /alerts:
+    get:
+      summary: List alerts
+      responses:
+        "200": { description: Alerts }
+  /audit:
+    get:
+      summary: List audit events
+      responses:
+        "200": { description: Audit events }
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: ufm_session
+    BearerToken:
+      type: http
+      scheme: bearer

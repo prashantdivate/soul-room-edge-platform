@@ -1,0 +1,4 @@
+.env
+dev-ca.pem
+web/dist/
+web/node_modules/

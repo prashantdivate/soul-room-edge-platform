@@ -1,0 +1,31 @@
+image:
+  repository: unified-fleet/control-plane
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+postgres:
+  external:
+    enabled: true
+    dsnSecretName: unified-fleet-postgres
+
+s3:
+  external:
+    enabled: true
+    endpointSecretName: unified-fleet-s3
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: fleet.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi

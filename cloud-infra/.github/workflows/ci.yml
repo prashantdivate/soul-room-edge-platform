@@ -1,0 +1,37 @@
+name: cloud-infra-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - working-directory: cloud-infra
+        run: gofmt -w ./cmd ./internal
+      - working-directory: cloud-infra
+        run: git diff --exit-code
+      - working-directory: cloud-infra
+        run: go test ./...
+      - working-directory: cloud-infra
+        run: go test -race ./...
+      - working-directory: cloud-infra
+        run: go vet ./...
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - working-directory: cloud-infra/web
+        run: npm install
+      - working-directory: cloud-infra/web
+        run: npm run build
+      - working-directory: cloud-infra/web
+        run: npm test

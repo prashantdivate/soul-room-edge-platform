@@ -197,15 +197,18 @@ agent state, certificates, and file-backed control-plane stores are ignored by
 Git. A fresh clone starts with only the local administrator and organization;
 it contains no devices, telemetry, jobs, or events from another installation.
 
-To intentionally erase a local installation and return to that clean state:
+To intentionally erase a local installation and return to that clean state, run
+these commands from the repository root on Windows, Linux, or macOS:
 
 ```bash
 docker compose -f cloud-infra/compose.yaml down -v
 docker compose -f cloud-infra/compose.yaml up --build -d
 ```
 
-The first command permanently removes the local Compose volumes, so use the
-maintenance backup profile first when the data matters.
+The first command permanently removes this installation's registered devices,
+telemetry, jobs, events, certificates, database records, and object data. It does
+not delete source files. Use the maintenance backup profile first when the local
+fleet data matters.
 
 ## Product Direction
 

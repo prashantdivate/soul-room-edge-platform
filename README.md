@@ -59,22 +59,29 @@ not part of the agent protocol.
 ## Run The Platform
 
 The only host requirement is Docker Desktop or Docker Engine with Docker
-Compose. From the repository root:
+Compose. Copy `cloud-infra/.env.example` to `cloud-infra/.env`, then set your
+company identity and initial owner account:
+
+```dotenv
+SOULROOM_ORGANIZATION_NAME=Acme Devices
+SOULROOM_ORGANIZATION_SLUG=acme-devices
+SOULROOM_ADMIN_EMAIL=admin@acme.com
+SOULROOM_ADMIN_PASSWORD=replace-with-a-long-unique-password
+```
+
+From the repository root:
 
 ```bash
 docker compose -f cloud-infra/compose.yaml up --build -d
 ```
 
-Open [http://localhost:3080](http://localhost:3080) and use the local seed
-account:
-
-```text
-Email:    admin@example.local
-Password: change-me-local
-```
+Open [http://localhost:3080](http://localhost:3080) and sign in with the owner
+account configured in `cloud-infra/.env`.
 
 Compose starts the console, API/device gateway, PostgreSQL, MinIO, and Mailpit.
-It creates only the administrator and organization. Stop it with:
+It creates only the configured administrator and organization. Bootstrap
+credentials are applied only to a clean installation and are not reapplied on
+normal restarts. Stop it with:
 
 ```bash
 docker compose -f cloud-infra/compose.yaml down

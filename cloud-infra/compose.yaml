@@ -44,6 +44,10 @@ services:
     user: "0:0"
     environment:
       SOULROOM_STORE_PATH: /data/control-plane.json
+      SOULROOM_ORGANIZATION_NAME: ${SOULROOM_ORGANIZATION_NAME:-Soul Room Local}
+      SOULROOM_ORGANIZATION_SLUG: ${SOULROOM_ORGANIZATION_SLUG:-local}
+      SOULROOM_ADMIN_EMAIL: ${SOULROOM_ADMIN_EMAIL:-admin@soulroom.local}
+      SOULROOM_ADMIN_PASSWORD: ${SOULROOM_ADMIN_PASSWORD:-change-me-local}
     volumes:
       - app-data:/data
     depends_on:

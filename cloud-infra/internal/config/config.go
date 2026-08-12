@@ -12,6 +12,10 @@ type Config struct {
 	DevicePublicHost string
 	StorePath        string
 	DevCADir         string
+	OrganizationName string
+	OrganizationSlug string
+	AdminEmail       string
+	AdminPassword    string
 	SessionTTL       time.Duration
 	CertificateTTL   time.Duration
 	SignupEnabled    bool
@@ -26,6 +30,10 @@ func Load() Config {
 		DevicePublicHost: getenv("SOULROOM_DEVICE_PUBLIC_HOST", "localhost"),
 		StorePath:        getenv("SOULROOM_STORE_PATH", ".soul-room/control-plane.json"),
 		DevCADir:         getenv("SOULROOM_DEV_CA_DIR", ".soul-room/ca"),
+		OrganizationName: getenv("SOULROOM_ORGANIZATION_NAME", "Soul Room Local"),
+		OrganizationSlug: getenv("SOULROOM_ORGANIZATION_SLUG", "local"),
+		AdminEmail:       getenv("SOULROOM_ADMIN_EMAIL", "admin@soulroom.local"),
+		AdminPassword:    getenv("SOULROOM_ADMIN_PASSWORD", "change-me-local"),
 		SessionTTL:       duration("SOULROOM_SESSION_TTL", 12*time.Hour),
 		CertificateTTL:   duration("SOULROOM_CERTIFICATE_TTL", 90*24*time.Hour),
 		SignupEnabled:    getenv("SOULROOM_SIGNUP_ENABLED", "false") == "true",

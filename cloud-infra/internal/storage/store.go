@@ -133,6 +133,27 @@ func (s *Store) CreateOrganization(name, slug string) (model.Organization, error
 	return org, s.saveLocked()
 }
 
+func (s *Store) BootstrapOrganizationOwner(name, slug, email, passwordHash string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.data.Organizations) > 0 || len(s.data.Users) > 0 || len(s.data.Memberships) > 0 {
+		return false, nil
+	}
+	now := time.Now()
+	org := model.Organization{ID: NewID("org"), Name: name, Slug: slug, CreatedAt: now}
+	user := model.User{ID: NewID("usr"), Email: email, PasswordHash: passwordHash, ActivatedAt: now, CreatedAt: now}
+	s.data.Organizations[org.ID] = org
+	s.data.Users[user.ID] = user
+	s.data.Memberships = append(s.data.Memberships, model.Membership{TenantID: org.ID, UserID: user.ID, Role: "organization_owner"})
+	if err := s.saveLocked(); err != nil {
+		delete(s.data.Organizations, org.ID)
+		delete(s.data.Users, user.ID)
+		s.data.Memberships = s.data.Memberships[:0]
+		return false, err
+	}
+	return true, nil
+}
+
 func (s *Store) ListOrganizations() []model.Organization {
 	s.mu.Lock()
 	defer s.mu.Unlock()

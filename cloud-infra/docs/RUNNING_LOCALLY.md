@@ -11,12 +11,18 @@ Open the VS Code terminal in `cloud-infra`, then run:
 docker compose up --build -d
 ```
 
-Open `http://localhost:3080` and sign in with the local development account:
+Copy `.env.example` to `.env` and set the company and initial owner values:
 
-```text
-Email: admin@example.local
-Password: change-me-local
+```dotenv
+SOULROOM_ORGANIZATION_NAME=Acme Devices
+SOULROOM_ORGANIZATION_SLUG=acme-devices
+SOULROOM_ADMIN_EMAIL=admin@acme.com
+SOULROOM_ADMIN_PASSWORD=replace-with-a-long-unique-password
 ```
+
+Open `http://localhost:3080` and sign in with that owner account. These values
+are used only when the data volume is empty; normal restarts never reset the
+owner password.
 
 Compose starts the web console, control API, device gateway, worker, PostgreSQL,
 MinIO, and Mailpit. On the first run it creates only the local administrator and

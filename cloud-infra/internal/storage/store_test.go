@@ -9,6 +9,32 @@ import (
 	"github.com/soul-room/cloud-infra/internal/tenancy"
 )
 
+func TestBootstrapOrganizationOwnerRunsOnlyOnce(t *testing.T) {
+	store, err := Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := store.BootstrapOrganizationOwner("Acme Devices", "acme-devices", "admin@acme.com", "first-hash")
+	if err != nil || !created {
+		t.Fatalf("first bootstrap failed: created=%v err=%v", created, err)
+	}
+	created, err = store.BootstrapOrganizationOwner("Other Company", "other", "owner@other.com", "replacement-hash")
+	if err != nil || created {
+		t.Fatalf("second bootstrap changed installation: created=%v err=%v", created, err)
+	}
+	organizations := store.ListOrganizations()
+	if len(organizations) != 1 || organizations[0].Name != "Acme Devices" {
+		t.Fatalf("bootstrap organization changed: %+v", organizations)
+	}
+	owner, err := store.FindUserByEmail("admin@acme.com")
+	if err != nil || owner.PasswordHash != "first-hash" {
+		t.Fatalf("bootstrap owner changed: %+v err=%v", owner, err)
+	}
+	if _, err := store.FindUserByEmail("owner@other.com"); err == nil {
+		t.Fatal("second bootstrap created another owner")
+	}
+}
+
 func TestTenantIsolationDevicesTelemetryJobsAudit(t *testing.T) {
 	store, err := Open("")
 	if err != nil {

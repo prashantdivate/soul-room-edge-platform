@@ -347,12 +347,12 @@ function Sidebar({ active, open, alertCount, onNavigate }: { active: PageId; ope
   return (
     <aside className={open ? "sidebar open" : "sidebar"} aria-label="Primary navigation">
       <div className="navRail">
-        <div className="railBrand"><img src="/soul-room-mark.svg" alt="Soul Room" /></div>
+        <div className="railBrand"><img src="/soul-room-mark.png?v=2" alt="Soul Room" /></div>
         <nav aria-label="Workspace groups">{navigation.map((group) => { const Icon = group.icon; const selected = group === activeGroup; return <button key={group.label} className={selected ? "railButton active" : "railButton"} onClick={() => onNavigate(group.pages[0].id)} title={group.label} aria-label={group.label}><Icon size={20} />{group.label === "Operate" && alertCount > 0 && <i />}</button>; })}</nav>
         <span className="railStatus" title="Platform online"><i /></span>
       </div>
       <div className="navPanel">
-        <div className="brand"><div className="brandText"><strong>Soul Room</strong><span>Fleet operations</span></div></div>
+        <div className="brand"><img src="/soul-room-mark.png?v=2" alt="Soul Room" /></div>
         <div className="navContext"><span>Workspace</span><strong>{activeGroup.label}</strong></div>
         <nav className="navScroll">
           <div className="navGroup">
@@ -383,13 +383,14 @@ function GlobalSearchResults({ data, query, onSelect }: { data: FleetData; query
 }
 
 function Login({ loading, error, onSubmit }: { loading: boolean; error: string; onSubmit: (email: string, password: string) => void }) {
-  const [email, setEmail] = React.useState("admin@example.local");
-  const [password, setPassword] = React.useState("change-me-local");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [capsLock, setCapsLock] = React.useState(false);
   const [eventIndex, setEventIndex] = React.useState(0);
   const reduceMotion = useReducedMotion();
   const events = ["Device identity verified", "Health signal received", "Pilot update staged", "Policy change recorded"];
+  const canSubmit = email.trim().length > 3 && password.length > 0 && !loading;
   React.useEffect(() => {
     if (reduceMotion) return;
     const timer = window.setInterval(() => setEventIndex((index) => (index + 1) % events.length), 2600);
@@ -398,14 +399,14 @@ function Login({ loading, error, onSubmit }: { loading: boolean; error: string; 
   return (
     <main className="loginPage">
       <section className="loginStory">
-        <div className="loginBrand"><img src="/soul-room-mark.svg" alt="" /><strong>Soul Room</strong></div>
+        <div className="loginBrand"><img src="/soul-room-mark.png?v=2" alt="Soul Room" /></div>
         <div className="storyCopy"><span>Edge operations, composed</span><h1>A calm room for every connected device.</h1><p>Observe health, understand software risk, and deliver controlled changes across embedded Linux fleets.</p></div>
         <div className="operationsScene" aria-hidden="true">
           <motion.div className="sceneLane edgeLane" initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .55 }}>
             <span><Cpu size={18} /></span><span><RadioTower size={18} /></span><span><GitBranch size={18} /></span><small>EDGE FLEET</small>
           </motion.div>
           <div className="signalPath leftPath">{[0, 1, 2].map((packet) => <motion.i key={packet} animate={reduceMotion ? undefined : { left: ["2%", "88%"], opacity: [0, 1, 1, 0] }} transition={{ duration: 2.5, repeat: Infinity, delay: packet * .8, ease: "easeInOut" }} />)}</div>
-          <motion.div className="sceneCore" initial={{ opacity: 0, scale: .78 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 170, damping: 18, delay: .2 }}><img src="/soul-room-mark.svg" alt="" /><strong>Soul Room</strong><span>CONTROL PLANE</span><motion.b animate={reduceMotion ? undefined : { scale: [1, 1.18, 1], opacity: [.45, .12, .45] }} transition={{ duration: 2.8, repeat: Infinity }} /></motion.div>
+          <motion.div className="sceneCore" initial={{ opacity: 0, scale: .78 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 170, damping: 18, delay: .2 }}><img src="/soul-room-mark.png?v=2" alt="" /><span>CONTROL PLANE</span><motion.b animate={reduceMotion ? undefined : { scale: [1, 1.18, 1], opacity: [.45, .12, .45] }} transition={{ duration: 2.8, repeat: Infinity }} /></motion.div>
           <div className="signalPath rightPath">{[0, 1, 2].map((packet) => <motion.i key={packet} animate={reduceMotion ? undefined : { left: ["2%", "88%"], opacity: [0, 1, 1, 0] }} transition={{ duration: 2.8, repeat: Infinity, delay: packet * .9, ease: "easeInOut" }} />)}</div>
           <motion.div className="sceneLane controlLane" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .55, delay: .15 }}>
             <span><ShieldCheck size={18} /></span><span><CloudCog size={18} /></span><span><TerminalSquare size={18} /></span><small>OPERATIONS</small>
@@ -414,14 +415,16 @@ function Login({ loading, error, onSubmit }: { loading: boolean; error: string; 
         <div className="sceneEvent"><span className="connectionDot" /><AnimatePresence mode="wait"><motion.strong key={events[eventIndex]} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .28 }}>{events[eventIndex]}</motion.strong></AnimatePresence><small>Encrypted and audit recorded</small></div>
       </section>
       <section className="loginFormWrap">
-        <motion.form className="loginForm" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .5, delay: .12 }} onSubmit={(event) => { event.preventDefault(); onSubmit(email, password); }}>
-          <div className="mobileLoginBrand"><img src="/soul-room-mark.svg" alt="" /><strong>Soul Room</strong></div>
-          <div className="formIntro"><span className="overline">Private operations workspace</span><h2>Welcome back</h2><p>Sign in with your organization account.</p></div>
+        <motion.form className="loginForm" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .5, delay: .12 }} onSubmit={(event) => { event.preventDefault(); if (canSubmit) onSubmit(email.trim().toLowerCase(), password); }}>
+          <div className="mobileLoginBrand"><img src="/soul-room-mark.png?v=2" alt="Soul Room" /></div>
+          <div className="workspaceBadge"><ShieldCheck size={14} /><span>Private company workspace</span></div>
+          <div className="formIntro"><h2>Welcome back</h2><p>Use the account provided by your organization administrator.</p></div>
           {error && <div className="formError"><AlertTriangle size={17} />{error}</div>}
-          <label>Email address<div className="loginInput"><Mail size={16} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" autoFocus /></div></label>
-          <label>Password<div className="loginInput"><LockKeyhole size={16} /><input type={showPassword ? "text" : "password"} value={password} onKeyUp={(event) => setCapsLock(event.getModifierState("CapsLock"))} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" /><button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>{capsLock && <span className="capsNotice">Caps Lock is on</span>}</label>
-          <motion.button whileHover={reduceMotion ? undefined : { y: -1 }} whileTap={reduceMotion ? undefined : { scale: .985 }} className="button primary loginButton" disabled={loading}>{loading ? <LoaderCircle className="spin" size={18} /> : <LockKeyhole size={17} />}{loading ? "Signing in..." : "Sign in"}</motion.button>
-          <div className="loginAssurance"><ShieldCheck size={16} /><span>Session-protected and tenant-scoped access</span></div>
+          <label>Email address<div className="loginInput"><Mail size={16} /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" autoComplete="username" inputMode="email" required autoFocus /></div></label>
+          <label>Password<div className="loginInput"><LockKeyhole size={16} /><input type={showPassword ? "text" : "password"} value={password} onKeyUp={(event) => setCapsLock(event.getModifierState("CapsLock"))} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>{capsLock && <span className="capsNotice">Caps Lock is on</span>}</label>
+          <motion.button whileHover={!canSubmit || reduceMotion ? undefined : { y: -1 }} whileTap={!canSubmit || reduceMotion ? undefined : { scale: .985 }} className="button primary loginButton" disabled={!canSubmit}>{loading ? <LoaderCircle className="spin" size={18} /> : <LockKeyhole size={17} />}{loading ? "Signing in..." : "Sign in securely"}</motion.button>
+          <div className="loginHelp"><span>Need access?</span><strong>Contact your company administrator.</strong></div>
+          <div className="loginAssurance"><ShieldCheck size={16} /><span>Encrypted session</span><i /><span>Tenant-isolated access</span></div>
         </motion.form>
       </section>
     </main>
@@ -871,8 +874,8 @@ function Capacity({ label, value, detail }: { label: string; value: number; deta
 function AdminAction({ icon, title, detail, primary, meta, href }: { icon: React.ReactNode; title: string; detail: string; primary: string; meta: string; href?: string }) { const button = <>{icon}<div><strong>{title}</strong><span>{detail}</span></div><ChevronRight size={18} /></>; return <section className="adminAction">{href ? <a href={href} download>{button}</a> : <button disabled title={`${primary} action is not configured`}>{button}</button>}<small>{meta}</small></section>; }
 
 function TelemetryChart({ data }: { data: { time: string; cpu?: number; memory?: number; disk?: number; temperature?: number }[] }) {
-  const series = [{ label: "CPU", color: "#168f7d" }, { label: "Memory", color: "#5966be" }, { label: "Disk", color: "#c98a20" }, { label: "Temperature", color: "#cb5a52" }];
-  return <div className="chartComposition"><div className="chartKey">{series.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}</span>)}</div><div className="chartPlot"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 10, right: 22, left: -10, bottom: 2 }}><CartesianGrid stroke="#e5eceb" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="time" minTickGap={38} tick={{ fill: "#748583", fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis domain={[0, 100]} width={42} tickFormatter={(value) => `${value}%`} tick={{ fill: "#748583", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip cursor={{ stroke: "#a9b9b6", strokeDasharray: "3 3" }} contentStyle={chartTooltipStyle} formatter={(value, seriesName) => [`${Number(value).toFixed(1)}${seriesName === "Temp °C" ? " °C" : "%"}`, seriesName]} /><Area type="monotone" dataKey="cpu" name="CPU" stroke="#168f7d" fill="#168f7d" fillOpacity={0.07} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Area type="monotone" dataKey="memory" name="Memory" stroke="#5966be" fill="#5966be" fillOpacity={0.045} strokeWidth={2.25} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Line type="monotone" dataKey="disk" name="Disk" stroke="#c98a20" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Line type="monotone" dataKey="temperature" name="Temp °C" stroke="#cb5a52" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /></AreaChart></ResponsiveContainer></div></div>;
+  const series = [{ label: "CPU", color: "#0891b2" }, { label: "Memory", color: "#5966be" }, { label: "Disk", color: "#c98a20" }, { label: "Temperature", color: "#cb5a52" }];
+  return <div className="chartComposition"><div className="chartKey">{series.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}</span>)}</div><div className="chartPlot"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 10, right: 22, left: -10, bottom: 2 }}><CartesianGrid stroke="#e6e9f2" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="time" minTickGap={38} tick={{ fill: "#747b91", fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis domain={[0, 100]} width={42} tickFormatter={(value) => `${value}%`} tick={{ fill: "#747b91", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip cursor={{ stroke: "#b1b5c8", strokeDasharray: "3 3" }} contentStyle={chartTooltipStyle} formatter={(value, seriesName) => [`${Number(value).toFixed(1)}${seriesName === "Temp °C" ? " °C" : "%"}`, seriesName]} /><Area type="monotone" dataKey="cpu" name="CPU" stroke="#0891b2" fill="#0891b2" fillOpacity={0.07} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Area type="monotone" dataKey="memory" name="Memory" stroke="#5966be" fill="#5966be" fillOpacity={0.045} strokeWidth={2.25} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Line type="monotone" dataKey="disk" name="Disk" stroke="#c98a20" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Line type="monotone" dataKey="temperature" name="Temp °C" stroke="#cb5a52" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /></AreaChart></ResponsiveContainer></div></div>;
 }
 
 function PresenceChart({ connected, total }: { connected: number; total: number }) {
@@ -887,7 +890,7 @@ function ConnectorChart({ devices }: { devices: FleetData["downstream"] }) {
 
 function ResourceBars({ metrics }: { metrics: FleetData["metrics"] }) {
   const rows = [
-    { name: "CPU", value: latestMatching(metrics, "cpu.utilization"), fill: "#14a89a" },
+    { name: "CPU", value: latestMatching(metrics, "cpu.utilization"), fill: "#0891b2" },
     { name: "Memory", value: latestMatching(metrics, "memory.utilization"), fill: "#6f78e8" },
     { name: "Disk", value: latestMatching(metrics, "filesystem.utilization"), fill: "#f2a51a" },
     { name: "Temperature", value: latestMatching(metrics, "temperature"), fill: "#ef6a6a" },
@@ -899,7 +902,7 @@ function ResourceBars({ metrics }: { metrics: FleetData["metrics"] }) {
 function NetworkChart({ metrics }: { metrics: FleetData["metrics"] }) {
   const rows = [
     { name: "Received", value: latestMatching(metrics, "network.receive_bytes_total"), fill: "#2b8ee6" },
-    { name: "Transmitted", value: latestMatching(metrics, "network.transmit_bytes_total"), fill: "#21b978" },
+    { name: "Transmitted", value: latestMatching(metrics, "network.transmit_bytes_total"), fill: "#6d5ce7" },
   ].filter((row) => row.value !== undefined).map((row) => ({ ...row, value: Number(row.value) / 1024 / 1024 }));
   if (!rows.length) return <ChartEmpty text="Waiting for network counters" />;
   return <ResponsiveContainer width="100%" height="100%"><BarChart data={rows} margin={{ top: 28, right: 22, left: 2, bottom: 2 }}><CartesianGrid stroke="#e5eceb" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#536865", fontSize: 12 }} /><YAxis unit=" MB" width={68} axisLine={false} tickLine={false} tick={{ fill: "#748583", fontSize: 11 }} /><Tooltip cursor={{ fill: "#f3f7f6" }} contentStyle={chartTooltipStyle} formatter={(value) => `${Number(value).toFixed(1)} MB`} /><Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={72}><LabelList dataKey="value" position="top" formatter={(value) => `${Number(value).toFixed(1)} MB`} fill="#425653" fontSize={11} />{rows.map((row) => <Cell key={row.name} fill={row.fill} />)}</Bar></BarChart></ResponsiveContainer>;

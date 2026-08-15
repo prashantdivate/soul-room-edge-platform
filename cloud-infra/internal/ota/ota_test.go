@@ -1,21 +1,26 @@
 package ota
 
-import "testing"
+import (
+	"encoding/base64"
+	"testing"
+)
+
+func testSignature() string { return base64.StdEncoding.EncodeToString(make([]byte, 64)) }
 
 func TestValidateMetadata(t *testing.T) {
-	valid := Campaign{Name: "release", ArtifactURL: "https://example.test/release.mender", Version: "2", Architecture: "arm64", Digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Signature: "key-1", Adapter: "mender", TargetIDs: []string{"device-1"}, CanaryPercent: 10}
+	valid := Campaign{Name: "release", ArtifactURL: "https://example.test/release.mender", Version: "2", Architecture: "arm64", Digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Signature: testSignature(), SigningKeyID: "release-2026", Adapter: "mender", TargetIDs: []string{"device-1"}, CanaryPercent: 10}
 	if err := ValidateMetadata(valid); err != nil {
 		t.Fatalf("valid campaign rejected: %v", err)
 	}
 	invalid := valid
-	invalid.Adapter = "shell"
+	invalid.Adapter = "shell;command"
 	if err := ValidateMetadata(invalid); err == nil {
 		t.Fatal("unsupported adapter accepted")
 	}
 }
 
 func TestValidateARMArchitectures(t *testing.T) {
-	base := Campaign{Name: "release", ArtifactURL: "https://example.test/release.mender", Version: "2", Digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Signature: "key-1", Adapter: "mender", TargetIDs: []string{"device-1"}, CanaryPercent: 10}
+	base := Campaign{Name: "release", ArtifactURL: "https://example.test/release.mender", Version: "2", Digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Signature: testSignature(), SigningKeyID: "release-2026", Adapter: "mender", TargetIDs: []string{"device-1"}, CanaryPercent: 10}
 	for _, architecture := range []string{"arm64", "aarch64", "armv7", "armv7l"} {
 		campaign := base
 		campaign.Architecture = architecture

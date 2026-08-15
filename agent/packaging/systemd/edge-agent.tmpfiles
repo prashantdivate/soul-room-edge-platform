@@ -1,3 +1,7 @@
-d /run/edge-agent 0750 edge-agent edge-agent -
-d /var/lib/edge-agent 0750 edge-agent edge-agent -
-d /var/lib/edge-agent/identity 0700 edge-agent edge-agent -
+d /run/edge-agent 0750 root root -
+d /var/lib/edge-agent 0750 root root -
+d /var/lib/edge-agent/identity 0700 root root -
+d /var/lib/edge-agent/ota 0700 root root -
+d /var/lib/edge-agent/ota/staging 0700 root root -
+d /etc/edge-agent/trusted-update-keys 0750 root root -
+d /usr/libexec/edge-agent/ota 0755 root root -

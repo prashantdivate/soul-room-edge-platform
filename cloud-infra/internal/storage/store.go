@@ -682,7 +682,7 @@ func (s *Store) NextJobForDevice(tc tenancy.Context, deviceID string) (model.Job
 	defer s.mu.Unlock()
 	now := time.Now()
 	for id, job := range s.data.Jobs {
-		if job.TenantID == tc.TenantID && job.DeviceID == deviceID && (job.State == "queued" || job.State == "delivered") {
+		if job.TenantID == tc.TenantID && job.DeviceID == deviceID && (job.State == "queued" || job.State == "delivered" || job.State == "running" || job.State == "rebooting") {
 			if now.After(job.ExpiresAt) {
 				job.State = "expired"
 				s.data.Jobs[id] = job
@@ -713,7 +713,7 @@ func (s *Store) CompleteJob(tc tenancy.Context, jobID string, result json.RawMes
 	}
 	_ = json.Unmarshal(result, &reported)
 	job.State = reported.State
-	if job.State != "succeeded" && job.State != "failed" {
+	if job.State != "succeeded" && job.State != "failed" && job.State != "rebooting" && job.State != "running" {
 		job.State = "failed"
 	}
 	job.Result = result

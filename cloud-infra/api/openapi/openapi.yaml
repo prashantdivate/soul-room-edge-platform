@@ -117,6 +117,11 @@ paths:
       summary: List OTA campaigns
       responses:
         "200": { description: OTA campaigns }
+    post:
+      summary: Create a signed, capability-gated OTA campaign and queue its pilot group
+      responses:
+        "201": { description: OTA campaign created }
+        "400": { description: Invalid release metadata or incompatible target }
   /alerts:
     get:
       summary: List alerts

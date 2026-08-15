@@ -114,7 +114,10 @@ export type OTACampaign = {
   architecture: string;
   digest: string;
   signature: string;
-  adapter: "mender" | "rauc" | "ostree" | "flatpak";
+  signing_key_id?: string;
+  artifact_size?: number;
+  compatible_from?: string[];
+  adapter: string;
   flatpak_ref?: string;
   flatpak_remote?: string;
   flatpak_commit?: string;

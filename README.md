@@ -19,7 +19,7 @@ operator workflow to Windows, Linux, or macOS.
 | --- | --- |
 | Fleet visibility | Real enrollment, device presence, hardware/OS inventory, telemetry, downstream gateways, and actual device locations |
 | Operations | Typed jobs, offline delivery queue, diagnostics, bounded log collection, and bundled self-hosted ShellHub remote access |
-| Updates | Signed OS release plans for arm64/aarch64 and armv7, pilot-first Flatpak updates, exact OSTree commit pinning, and self-hosted `.flatpakrepo` descriptors |
+| Updates | Capability-gated Mender, RAUC, OSTree, SWUpdate, Flatpak, and custom-plugin campaigns with signed artifacts, durable reboot recovery, health confirmation, rollback, and pilot-first delivery |
 | Software posture | Installed Debian/RPM package inventory and optional Trivy-backed OS vulnerability advisory scans |
 | Governance | Tenant isolation, built-in RBAC, team-user creation, server-side sessions, and append-oriented audit activity |
 | Platform | One Docker Compose command, PostgreSQL, MinIO, Mailpit, local durable state, backup/restore profiles, Helm and Terraform foundations |
@@ -241,8 +241,8 @@ fleet data matters.
 
 ## Product Direction
 
-The strongest next investments are production PostgreSQL/S3 adapters, signed
-artifact upload and provenance, phased OS-adapter execution, SSO/MFA, alert
+The strongest next investments are production PostgreSQL/S3 adapters, managed
+artifact upload and provenance, multi-wave rollout scheduling, SSO/MFA, alert
 routing, policy-as-code, software bill-of-material ingestion, and deeper
 ShellHub API/identity automation. The implemented/deferred matrices remain the source
 of truth while those areas evolve.

@@ -1,6 +1,7 @@
 package ota
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"net/url"
@@ -26,6 +27,9 @@ type Campaign struct {
 	Architecture         string    `json:"architecture"`
 	Digest               string    `json:"digest"`
 	Signature            string    `json:"signature"`
+	SigningKeyID         string    `json:"signing_key_id,omitempty"`
+	ArtifactSize         int64     `json:"artifact_size,omitempty"`
+	CompatibleFrom       []string  `json:"compatible_from,omitempty"`
 	Adapter              string    `json:"adapter"`
 	FlatpakRef           string    `json:"flatpak_ref,omitempty"`
 	FlatpakRemote        string    `json:"flatpak_remote,omitempty"`
@@ -60,14 +64,14 @@ func ValidateMetadata(c Campaign) error {
 		}
 		return validateRollout(c)
 	}
-	if c.ArtifactURL == "" || c.Digest == "" || c.Signature == "" {
-		return errors.New("OTA metadata requires name, artifact URL, version, digest, and signature")
+	if c.ArtifactURL == "" || c.Digest == "" || c.Signature == "" || c.SigningKeyID == "" {
+		return errors.New("OTA metadata requires an artifact URL, version, digest, detached signature, and signing key ID")
 	}
 	if !supportedArchitecture(c.Architecture) {
 		return errors.New("OTA architecture must be arm64/aarch64, armv7, or amd64")
 	}
-	if c.Adapter != "mender" && c.Adapter != "rauc" && c.Adapter != "ostree" {
-		return errors.New("update adapter must be mender, rauc, ostree, or flatpak")
+	if !regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`).MatchString(c.Adapter) {
+		return errors.New("update adapter name is invalid")
 	}
 	parsed, err := url.Parse(c.ArtifactURL)
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
@@ -76,6 +80,19 @@ func ValidateMetadata(c Campaign) error {
 	digest, err := hex.DecodeString(c.Digest)
 	if err != nil || len(digest) != 32 {
 		return errors.New("OTA digest must be a SHA-256 value")
+	}
+	if c.ArtifactSize < 0 {
+		return errors.New("OTA artifact size cannot be negative")
+	}
+	if !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`).MatchString(c.SigningKeyID) {
+		return errors.New("OTA signing key ID is invalid")
+	}
+	signature, err := base64.StdEncoding.DecodeString(c.Signature)
+	if err != nil {
+		signature, err = base64.RawStdEncoding.DecodeString(c.Signature)
+	}
+	if err != nil || len(signature) != 64 {
+		return errors.New("OTA signature must be a base64 Ed25519 signature")
 	}
 	return validateRollout(c)
 }

@@ -37,3 +37,16 @@ location:
   longitude: 0
   label: ""
   gpsd_address: 127.0.0.1:2947
+ota:
+  enabled: true
+  product: embedded-linux
+  state_dir: /var/lib/edge-agent/ota
+  staging_dir: /var/lib/edge-agent/ota/staging
+  trusted_keys_dir: /etc/edge-agent/trusted-update-keys
+  plugin_dir: /usr/libexec/edge-agent/ota
+  max_artifact_bytes: 4294967296
+  min_free_bytes: 268435456
+  download_timeout: 2h
+  health_timeout: 2m
+  health_check_command: ""
+  auto_reboot: false

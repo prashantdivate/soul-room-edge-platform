@@ -13,10 +13,7 @@ RuntimeDirectory=edge-agent
 ConfigurationDirectory=edge-agent
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/edge-agent /run/edge-agent -/var/lib/flatpak
-CapabilityBoundingSet=
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]

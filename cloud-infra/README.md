@@ -24,7 +24,8 @@ Implemented in this repository:
 * Docker Compose, Helm skeleton, Terraform skeleton, backup/restore scripts
 * responsive React/TypeScript operations console with global fleet search
 * device package inventory with optional Trivy advisory results
-* self-hosted Flatpak repository descriptors with pilot-first rollout
+* capability-gated Mender, RAUC, OSTree, SWUpdate, Flatpak, and custom adapter
+  campaigns with pilot-first rollout and explicit promotion
 
 The implementation uses repository interfaces so the runtime can use the local
 durable store for development while production deployments use PostgreSQL and

@@ -21,6 +21,9 @@
   through per-service commands.
 * Pinned self-hosted ShellHub Community Edition stack, persistent signing keys
   and database, tenant-device SSHID mapping, RBAC-gated launch, and audit event.
+* Capability-gated OTA campaigns for Mender, RAUC, OSTree, SWUpdate, Flatpak,
+  and device-provided adapter plugins, with pilot-first delivery, explicit
+  promotion, signed release metadata, and rebooting job state.
 
 ## Simulated or Interface-Only
 

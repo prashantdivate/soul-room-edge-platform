@@ -6,7 +6,8 @@ embedded Linux devices, and downstream controller fleets.
 The agent supports secure local identity creation, development enrollment,
 validated outbound HTTPS, heartbeat and telemetry reporting, bounded durable
 offline buffering, typed jobs, safe file deployment, Docker policy validation,
-Flatpak application updates, OTA adapter interfaces, and gateway connectors for simulated and read-only
+transactional Mender, RAUC, OSTree, SWUpdate and Flatpak update adapters, an
+extensible local OTA plugin interface, and gateway connectors for simulated and read-only
 Modbus TCP devices.
 
 ## Quick Start
@@ -20,7 +21,15 @@ docker build --target embedded-linux-armv7 --output type=local,dest=dist/embedde
 See `docs/EMBEDDED_LINUX_INSTALLATION.md` for installation and enrollment on
 64-bit or 32-bit ARM devices.
 
-## Optional Flatpak Updates
+## Device Updates
+
+The agent reports only update mechanisms installed on the device. All update
+mechanisms share signed artifact verification, compatibility checks, durable
+phase state, reboot recovery, health confirmation and rollback handling. See
+`docs/OTA_ADAPTERS.md` for device prerequisites, release signing, and the custom
+adapter contract.
+
+### Flatpak Applications
 
 Install Flatpak on the device. A campaign can use an existing system remote or
 an HTTPS `.flatpakrepo` descriptor from a self-hosted repository. The next

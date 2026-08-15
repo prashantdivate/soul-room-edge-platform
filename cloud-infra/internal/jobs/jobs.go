@@ -24,6 +24,7 @@ var AllowedTypes = map[string]bool{
 	"ota_stage":                      true,
 	"ota_activate":                   true,
 	"flatpak_update":                 true,
+	"ota_update":                     true,
 	"downstream_connector_command":   true,
 }
 

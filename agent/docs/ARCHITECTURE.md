@@ -12,7 +12,8 @@ The agent is a single Linux service with narrow internal subsystems:
 * `applications`: safe file deployment and application state adapters.
 * `containers`: managed container policy and provider abstraction.
 * `gateway` and `connectors`: downstream device representation and connectors.
-* `ota`: OTA adapter interface and simulator adapter.
+* `ota`: signed artifact download, durable transaction state, reboot recovery,
+  health/commit/rollback orchestration, native adapters, and local plugins.
 * `observability` and `audit`: structured logs, counters, and audit events.
 
 ## Trust Boundary
@@ -24,6 +25,7 @@ flowchart LR
   Agent --> Docker["Docker API"]
   Agent --> Files["Allowlisted file destinations"]
   Agent --> Gateway["Connector framework"]
+  Agent --> OTA["Root-owned native OTA adapter"]
   Gateway --> Modbus["Read-only Modbus TCP"]
   Gateway --> Sim["Simulator devices"]
 ```

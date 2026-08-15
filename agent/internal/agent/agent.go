@@ -12,6 +12,7 @@ import (
 	"github.com/soul-room/edge-agent/internal/jobs"
 	devicelocation "github.com/soul-room/edge-agent/internal/location"
 	"github.com/soul-room/edge-agent/internal/observability"
+	"github.com/soul-room/edge-agent/internal/ota"
 	"github.com/soul-room/edge-agent/internal/storage"
 	"github.com/soul-room/edge-agent/internal/telemetry"
 	"github.com/soul-room/edge-agent/internal/transport"
@@ -25,6 +26,7 @@ type Agent struct {
 	Store     *storage.Store
 	Transport *transport.Client
 	Jobs      *jobs.Registry
+	OTA       *ota.Engine
 }
 
 func New(cfg config.Config) (*Agent, error) {
@@ -41,6 +43,19 @@ func New(cfg config.Config) (*Agent, error) {
 		return nil, err
 	}
 	a := &Agent{Config: cfg, Identity: id, Store: store, Transport: tr}
+	if cfg.OTA.Enabled {
+		a.OTA, err = ota.NewEngine(ota.Config{
+			Enabled: cfg.OTA.Enabled, Product: cfg.OTA.Product, StateDir: cfg.OTA.StateDir,
+			StagingDir: cfg.OTA.StagingDir, TrustedKeysDir: cfg.OTA.TrustedKeysDir,
+			PluginDir: cfg.OTA.PluginDir, MaxArtifactBytes: cfg.OTA.MaxArtifactBytes,
+			MinFreeBytes: cfg.OTA.MinFreeBytes, DownloadTimeout: cfg.OTA.DownloadTimeout,
+			HealthTimeout: cfg.OTA.HealthTimeout, HealthCheckCommand: cfg.OTA.HealthCheckCommand,
+			AutoReboot: cfg.OTA.AutoReboot,
+		}, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
 	a.Jobs = newJobRegistry(a)
 	return a, nil
 }
@@ -79,7 +94,7 @@ func (a *Agent) tick(ctx context.Context) error {
 	if _, err := a.Transport.PostEnvelope(ctx, "/v1/telemetry", "telemetry.v1", batch); err != nil {
 		_ = a.enqueue("telemetry", storage.Low, batch)
 	}
-	inv := inventory.Collect(a.Identity, Version)
+	inv := inventory.CollectWithPluginDir(a.Identity, Version, a.Config.OTA.PluginDir)
 	if _, err := a.Transport.PostEnvelope(ctx, "/v1/inventory", "inventory.v1", inv); err != nil {
 		_ = a.enqueue("inventory", storage.Normal, inv)
 	}

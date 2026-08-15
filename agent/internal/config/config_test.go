@@ -18,6 +18,9 @@ storage:
   max_queue_bytes: 1048576
 jobs:
   allow_shell: false
+ota:
+  product: imx8mp-kiosk
+  auto_reboot: true
 `), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -27,6 +30,9 @@ jobs:
 	}
 	if cfg.Server.Endpoint != "https://example.test" {
 		t.Fatalf("endpoint = %s", cfg.Server.Endpoint)
+	}
+	if cfg.OTA.Product != "imx8mp-kiosk" || !cfg.OTA.AutoReboot {
+		t.Fatalf("OTA configuration was not loaded: %+v", cfg.OTA)
 	}
 }
 

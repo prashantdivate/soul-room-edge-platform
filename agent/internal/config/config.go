@@ -19,6 +19,7 @@ type Config struct {
 	Containers ContainerConfig
 	Gateway    GatewayConfig
 	Location   LocationConfig
+	OTA        OTAConfig
 }
 
 type ServerConfig struct {
@@ -68,6 +69,21 @@ type LocationConfig struct {
 	GPSDAddress string
 }
 
+type OTAConfig struct {
+	Enabled            bool
+	Product            string
+	StateDir           string
+	StagingDir         string
+	TrustedKeysDir     string
+	PluginDir          string
+	MaxArtifactBytes   int64
+	MinFreeBytes       uint64
+	DownloadTimeout    time.Duration
+	HealthTimeout      time.Duration
+	HealthCheckCommand string
+	AutoReboot         bool
+}
+
 func Default() Config {
 	return Config{
 		Version: 1,
@@ -105,6 +121,18 @@ func Default() Config {
 			ConnectorDir: "/etc/edge-agent/connectors.d",
 		},
 		Location: LocationConfig{Source: "disabled", GPSDAddress: "127.0.0.1:2947"},
+		OTA: OTAConfig{
+			Enabled:          true,
+			StateDir:         "/var/lib/edge-agent/ota",
+			StagingDir:       "/var/lib/edge-agent/ota/staging",
+			TrustedKeysDir:   "/etc/edge-agent/trusted-update-keys",
+			PluginDir:        "/usr/libexec/edge-agent/ota",
+			MaxArtifactBytes: 4 * 1024 * 1024 * 1024,
+			MinFreeBytes:     256 * 1024 * 1024,
+			DownloadTimeout:  2 * time.Hour,
+			HealthTimeout:    2 * time.Minute,
+			AutoReboot:       false,
+		},
 	}
 }
 
@@ -271,6 +299,49 @@ func setValue(cfg *Config, section, key, value string) error {
 		case "gpsd_address":
 			cfg.Location.GPSDAddress = value
 		}
+	case "ota":
+		switch key {
+		case "enabled":
+			cfg.OTA.Enabled = parseBool(value)
+		case "product":
+			cfg.OTA.Product = value
+		case "state_dir":
+			cfg.OTA.StateDir = value
+		case "staging_dir":
+			cfg.OTA.StagingDir = value
+		case "trusted_keys_dir":
+			cfg.OTA.TrustedKeysDir = value
+		case "plugin_dir":
+			cfg.OTA.PluginDir = value
+		case "max_artifact_bytes":
+			v, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				return err
+			}
+			cfg.OTA.MaxArtifactBytes = v
+		case "min_free_bytes":
+			v, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return err
+			}
+			cfg.OTA.MinFreeBytes = v
+		case "download_timeout":
+			d, err := time.ParseDuration(value)
+			if err != nil {
+				return err
+			}
+			cfg.OTA.DownloadTimeout = d
+		case "health_timeout":
+			d, err := time.ParseDuration(value)
+			if err != nil {
+				return err
+			}
+			cfg.OTA.HealthTimeout = d
+		case "health_check_command":
+			cfg.OTA.HealthCheckCommand = value
+		case "auto_reboot":
+			cfg.OTA.AutoReboot = parseBool(value)
+		}
 	}
 	return nil
 }
@@ -309,6 +380,17 @@ func (c Config) Validate() error {
 	}
 	if c.Location.Source == "static" && (c.Location.Latitude < -90 || c.Location.Latitude > 90 || c.Location.Longitude < -180 || c.Location.Longitude > 180) {
 		return fmt.Errorf("static location coordinates are invalid")
+	}
+	if c.OTA.Enabled {
+		if c.OTA.StateDir == "" || c.OTA.StagingDir == "" || c.OTA.TrustedKeysDir == "" || c.OTA.PluginDir == "" {
+			return fmt.Errorf("ota directories are required when OTA is enabled")
+		}
+		if c.OTA.MaxArtifactBytes < 1024*1024 {
+			return fmt.Errorf("ota.max_artifact_bytes must be at least 1 MiB")
+		}
+		if c.OTA.DownloadTimeout < time.Minute || c.OTA.HealthTimeout < time.Second {
+			return fmt.Errorf("OTA download and health timeouts are too short")
+		}
 	}
 	return nil
 }

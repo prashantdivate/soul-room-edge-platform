@@ -351,8 +351,8 @@ func (s *Server) otaCampaigns(w http.ResponseWriter, r *http.Request) {
 			errorJSON(w, http.StatusBadRequest, "incompatible_target", "campaign architecture does not match every target")
 			return
 		}
-		if campaign.Adapter == "flatpak" && !containsString(device.Capabilities, "ota:flatpak") {
-			errorJSON(w, http.StatusBadRequest, "incompatible_target", "every Flatpak target must report the ota:flatpak capability")
+		if !containsString(device.Capabilities, "ota:"+campaign.Adapter) {
+			errorJSON(w, http.StatusBadRequest, "incompatible_target", "every target must report support for the selected OTA adapter")
 			return
 		}
 	}
@@ -363,26 +363,24 @@ func (s *Server) otaCampaigns(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "campaign_error", err.Error())
 		return
 	}
-	if created.Adapter == "flatpak" {
-		canaryCount := int(math.Ceil(float64(len(created.TargetIDs)) * float64(created.CanaryPercent) / 100))
-		if canaryCount < 1 {
-			canaryCount = 1
-		}
-		if _, err := s.queueFlatpakJobs(tc, created, created.TargetIDs[:canaryCount]); err != nil {
-			created.State = "failed"
-			_ = s.Store.UpdateOTACampaign(tc, created)
-			errorJSON(w, http.StatusInternalServerError, "flatpak_queue_failed", err.Error())
-			return
-		}
-		if canaryCount < len(created.TargetIDs) {
-			created.State = "canary_queued"
-		} else {
-			created.State = "queued"
-		}
-		if err := s.Store.UpdateOTACampaign(tc, created); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "campaign_update_failed", err.Error())
-			return
-		}
+	canaryCount := int(math.Ceil(float64(len(created.TargetIDs)) * float64(created.CanaryPercent) / 100))
+	if canaryCount < 1 {
+		canaryCount = 1
+	}
+	if _, err := s.queueOTAJobs(tc, created, created.TargetIDs[:canaryCount]); err != nil {
+		created.State = "failed"
+		_ = s.Store.UpdateOTACampaign(tc, created)
+		errorJSON(w, http.StatusInternalServerError, "ota_queue_failed", err.Error())
+		return
+	}
+	if canaryCount < len(created.TargetIDs) {
+		created.State = "canary_queued"
+	} else {
+		created.State = "queued"
+	}
+	if err := s.Store.UpdateOTACampaign(tc, created); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "campaign_update_failed", err.Error())
+		return
 	}
 	audit.Record(s.Store, tc, "ota_campaign.created", "ota_campaign", created.ID, "success", map[string]string{"adapter": created.Adapter, "targets": boolString(len(created.TargetIDs) > 0)})
 	writeJSON(w, http.StatusCreated, created)
@@ -419,8 +417,8 @@ func (s *Server) promoteOTACampaign(w http.ResponseWriter, r *http.Request, tc t
 		errorJSON(w, http.StatusNotFound, "campaign_not_found", "campaign was not found")
 		return
 	}
-	if req.Action != "promote" || campaign.Adapter != "flatpak" || campaign.State != "canary_complete" {
-		errorJSON(w, http.StatusConflict, "campaign_not_promotable", "only a completed Flatpak canary can be promoted")
+	if req.Action != "promote" || campaign.State != "canary_complete" {
+		errorJSON(w, http.StatusConflict, "campaign_not_promotable", "only a completed pilot group can be promoted")
 		return
 	}
 	existing := map[string]bool{}
@@ -437,8 +435,8 @@ func (s *Server) promoteOTACampaign(w http.ResponseWriter, r *http.Request, tc t
 		errorJSON(w, http.StatusConflict, "campaign_already_promoted", "all campaign targets already have an update job")
 		return
 	}
-	if _, err := s.queueFlatpakJobs(tc, campaign, remaining); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "flatpak_queue_failed", err.Error())
+	if _, err := s.queueOTAJobs(tc, campaign, remaining); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "ota_queue_failed", err.Error())
 		return
 	}
 	campaign.State = "queued"
@@ -450,12 +448,14 @@ func (s *Server) promoteOTACampaign(w http.ResponseWriter, r *http.Request, tc t
 	writeJSON(w, http.StatusOK, campaign)
 }
 
-func (s *Server) queueFlatpakJobs(tc tenancy.Context, campaign ota.Campaign, deviceIDs []string) (int, error) {
-	payload, err := json.Marshal(map[string]string{
-		"campaign_id":    campaign.ID,
-		"ref":            campaign.FlatpakRef,
-		"remote":         campaign.FlatpakRemote,
-		"commit":         campaign.FlatpakCommit,
+func (s *Server) queueOTAJobs(tc tenancy.Context, campaign ota.Campaign, deviceIDs []string) (int, error) {
+	payload, err := json.Marshal(map[string]any{
+		"update_id": campaign.ID, "adapter": campaign.Adapter, "version": campaign.Version,
+		"product": campaign.Product, "architecture": campaign.Architecture,
+		"artifact_url": campaign.ArtifactURL, "artifact_size": campaign.ArtifactSize,
+		"digest": campaign.Digest, "signature": campaign.Signature, "signing_key_id": campaign.SigningKeyID,
+		"compatible_from": campaign.CompatibleFrom, "flatpak_ref": campaign.FlatpakRef,
+		"flatpak_remote": campaign.FlatpakRemote, "flatpak_commit": campaign.FlatpakCommit,
 		"repository_url": campaign.FlatpakRepositoryURL,
 	})
 	if err != nil {
@@ -463,11 +463,12 @@ func (s *Server) queueFlatpakJobs(tc tenancy.Context, campaign ota.Campaign, dev
 	}
 	created := 0
 	for _, deviceID := range deviceIDs {
-		job, err := jobs.New(deviceID, "flatpak_update", payload, tc.ActorID, 24*time.Hour)
+		job, err := jobs.New(deviceID, "ota_update", payload, tc.ActorID, 24*time.Hour)
 		if err != nil {
 			return created, err
 		}
 		job.DeploymentID = campaign.ID
+		job.TimeoutSeconds = 7200
 		job.IdempotencyKey = campaign.ID + ":" + deviceID
 		if _, err := s.Store.CreateJob(tc, job); err != nil {
 			return created, err

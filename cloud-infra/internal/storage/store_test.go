@@ -121,3 +121,31 @@ func TestDeleteJobRequiresTerminalState(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRebootingOTAJobIsRedeliveredUntilTerminal(t *testing.T) {
+	store, _ := Open("")
+	org, _ := store.CreateOrganization("Tenant", "tenant-ota-reboot")
+	tc := tenancy.Context{TenantID: org.ID}
+	device, _ := store.CreateDevice(model.Device{TenantID: org.ID, DisplayName: "edge"})
+	job, err := store.CreateJob(tc, model.Job{DeviceID: device.ID, Type: "ota_update", State: "queued", ExpiresAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delivered, err := store.NextJobForDevice(tc, device.ID)
+	if err != nil || delivered.ID != job.ID {
+		t.Fatalf("first delivery failed: %+v %v", delivered, err)
+	}
+	if err := store.CompleteJob(tc, job.ID, json.RawMessage(`{"state":"rebooting"}`)); err != nil {
+		t.Fatal(err)
+	}
+	redelivered, err := store.NextJobForDevice(tc, device.ID)
+	if err != nil || redelivered.ID != job.ID {
+		t.Fatalf("reboot recovery delivery failed: %+v %v", redelivered, err)
+	}
+	if err := store.CompleteJob(tc, job.ID, json.RawMessage(`{"state":"succeeded"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.NextJobForDevice(tc, device.ID); err == nil {
+		t.Fatal("terminal OTA job was delivered again")
+	}
+}

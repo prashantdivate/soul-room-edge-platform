@@ -15,7 +15,11 @@
 * Safe file deployment with destination allowlist, checksum verification,
   staging, backup, atomic rename, rollback, and audit records.
 * Docker provider abstraction and policy validation.
-* OTA adapter interface and simulator adapter.
+* Durable OTA transaction engine with bounded resumable HTTPS downloads,
+  SHA-256 and Ed25519 release verification, product/architecture/version
+  compatibility, reboot recovery, health confirmation, commit, and rollback.
+* Built-in Mender, RAUC, OSTree, SWUpdate, and Flatpak command adapters plus a
+  root-owned executable plugin contract for product-specific update systems.
 * Gateway downstream model, simulator connector, and read-only Modbus TCP
   connector.
 * CLI commands for status, identity, enrollment, config validation, telemetry,
@@ -27,7 +31,9 @@
 * SQLite backend and versioned SQL migrations.
 * TPM 2.0 and secure-element concrete integrations.
 * Full Docker Engine HTTP API implementation beyond policy-safe command hooks.
-* Production OSTree, Mender, RAUC, SWUpdate, and MCU bootloader adapters.
+* Hardware qualification of each native OTA adapter remains a product-image
+  responsibility because partition layouts, bootloaders, and health criteria
+  differ between devices.
 * Native remote shell in `edge-agent`, intentionally excluded; the platform
   delegates optional remote access to a separate ShellHub agent.
 * SELinux/AppArmor profiles beyond guidance.

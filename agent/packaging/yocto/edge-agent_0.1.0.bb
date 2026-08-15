@@ -18,4 +18,7 @@ do_install:append() {
     install -m 0755 ${B}/bin/edge-agentctl ${D}${bindir}/edge-agentctl
     install -d ${D}${sysconfdir}/edge-agent
     install -m 0640 ${S}/configs/edge-agent.yaml ${D}${sysconfdir}/edge-agent/config.yaml
+    install -d -m 0750 ${D}${sysconfdir}/edge-agent/trusted-update-keys
+    install -d -m 0755 ${D}${libexecdir}/edge-agent/ota
+    install -d -m 0700 ${D}${localstatedir}/lib/edge-agent/ota/staging
 }

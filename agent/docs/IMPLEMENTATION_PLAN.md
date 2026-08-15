@@ -13,8 +13,8 @@
 * Container operations are policy-validated through a provider interface. The
   default provider shells out to Docker only when an administrator has Docker
   installed and enabled.
-* OTA support starts with a simulator adapter and stable interfaces for OSTree,
-  Mender, RAUC, SWUpdate, and MCU bootloaders.
+* OTA uses a shared transaction engine with built-in OSTree, Mender, RAUC,
+  SWUpdate, and Flatpak adapters plus a local plugin contract.
 
 ## Phase 1
 
@@ -52,7 +52,8 @@
 
 ## Phase 5
 
-* Implement OTA adapter interface, simulator OTA, credential rotation interfaces,
+* Implement signed OTA downloads, adapter discovery, persistent reboot recovery,
+  native install/commit/rollback operations, credential rotation interfaces,
   migration hooks, hardening docs, and packaging.
 
 ## Completion Criteria Tracking

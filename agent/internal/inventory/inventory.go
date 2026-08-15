@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/soul-room/edge-agent/internal/identity"
+	"github.com/soul-room/edge-agent/internal/ota"
 )
 
 type InstalledPackage struct {
@@ -40,6 +41,10 @@ type Inventory struct {
 }
 
 func Collect(id identity.Identity, version string) Inventory {
+	return CollectWithPluginDir(id, version, "/usr/libexec/edge-agent/ota")
+}
+
+func CollectWithPluginDir(id identity.Identity, version, pluginDir string) Inventory {
 	hostname, _ := os.Hostname()
 	release := osRelease()
 	return Inventory{
@@ -56,16 +61,14 @@ func Collect(id identity.Identity, version string) Inventory {
 		MemoryTotalBytes:  memoryTotal(),
 		StorageTotalBytes: storageTotal("/"),
 		AgentVersion:      version,
-		Capabilities:      capabilities(),
+		Capabilities:      capabilities(pluginDir),
 		InstalledPackages: installedPackages(),
 	}
 }
 
-func capabilities() []string {
+func capabilities(pluginDir string) []string {
 	values := []string{"telemetry", "inventory", "jobs"}
-	if _, err := exec.LookPath("flatpak"); err == nil {
-		values = append(values, "ota:flatpak")
-	}
+	values = append(values, ota.DiscoverCapabilities(pluginDir, ota.OSRunner{})...)
 	if _, err := exec.LookPath("trivy"); err == nil {
 		values = append(values, "security:trivy")
 	}

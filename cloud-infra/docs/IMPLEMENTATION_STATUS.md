@@ -19,6 +19,8 @@
   workflows for every primary navigation area.
 * Compose service image can start `control-api`, `device-gateway`, or `worker`
   through per-service commands.
+* Pinned self-hosted ShellHub Community Edition stack, persistent signing keys
+  and database, tenant-device SSHID mapping, RBAC-gated launch, and audit event.
 
 ## Simulated or Interface-Only
 
@@ -28,7 +30,9 @@
   the in-process repository.
 * OIDC, SAML, external PKI, malware scanning, and notification providers are
   interfaces/docs rather than wired production integrations.
-* Remote access is intentionally documentation/interface only.
+* ShellHub account/namespace creation, device acceptance, and SSHID mapping are
+  explicit administrator steps; shared identity and automatic mapping are not
+  yet implemented.
 
 ## Deferred
 

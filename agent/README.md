@@ -48,7 +48,8 @@ For a full overview, see:
 * Device keys are generated locally and never sent to the server.
 * TLS server certificates are validated.
 * Production enrollment requires signed server responses.
-* Shell execution and unrestricted remote access are not implemented.
+* Shell execution is not part of the fleet protocol; optional remote access is
+  isolated in the separately installed ShellHub agent.
 * Jobs are typed, validated, scoped, time-limited, and persisted for idempotency.
 * File deployment uses destination allowlists, size limits, checksums, staging,
   and atomic rename where possible.

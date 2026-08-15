@@ -69,7 +69,9 @@ services:
       SOULROOM_DEVICE_PUBLIC_HOST: ${SOULROOM_DEVICE_PUBLIC_HOST:-localhost}
       SOULROOM_STORE_PATH: /data/control-plane.json
       SOULROOM_DEV_CA_DIR: /data/ca
-      SOULROOM_SHELLHUB_URL: ${SOULROOM_SHELLHUB_URL:-}
+      SOULROOM_SHELLHUB_URL: ${SOULROOM_SHELLHUB_URL:-http://localhost:8088}
+      SOULROOM_SHELLHUB_SSH_PORT: ${SOULROOM_SHELLHUB_SSH_PORT:-22222}
+      SOULROOM_SHELLHUB_MANAGED: "true"
     ports:
       - "8080:8080"
       - "8443:8443"
@@ -78,6 +80,8 @@ services:
     depends_on:
       seed:
         condition: service_completed_successfully
+      shellhub-gateway:
+        condition: service_healthy
 
   web-ui:
     build:
@@ -94,46 +98,229 @@ services:
       timeout: 3s
       retries: 12
 
+  shellhub-keygen:
+    build:
+      context: .
+      dockerfile: deploy/compose/shellhub-keygen.Dockerfile
+    volumes:
+      - shellhub-keys:/keys
+    restart: "no"
+
+  shellhub-postgres:
+    image: postgres:18.0
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shellhub
+      POSTGRES_PASSWORD: ${SOULROOM_SHELLHUB_POSTGRES_PASSWORD:-shellhub-local-dev-only}
+      POSTGRES_DB: shellhub
+    volumes:
+      - shellhub-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shellhub -d shellhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  shellhub-redis:
+    image: valkey/valkey:9.1-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "no", "--save", "\"\""]
+    networks:
+      default:
+        aliases: [redis]
+
+  shellhub-api:
+    image: shellhubio/api:${SOULROOM_SHELLHUB_VERSION:-v0.26.0}
+    restart: unless-stopped
+    environment:
+      SHELLHUB_VERSION: ${SOULROOM_SHELLHUB_VERSION:-v0.26.0}
+      DATABASE: postgres
+      PRIVATE_KEY: /keys/api_private_key
+      PUBLIC_KEY: /keys/api_public_key
+      SHELLHUB_ENTERPRISE: "false"
+      SHELLHUB_CLOUD: "false"
+      POSTGRES_HOST: shellhub-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: shellhub
+      POSTGRES_PASSWORD: ${SOULROOM_SHELLHUB_POSTGRES_PASSWORD:-shellhub-local-dev-only}
+      POSTGRES_DATABASE: shellhub
+      TELEMETRY: "false"
+      SHELLHUB_LOG_LEVEL: info
+      SHELLHUB_LOG_FORMAT: text
+      SENTRY_DSN: ""
+      SHELLLHUB_ANNOUNCEMENTS: "false"
+      SHELLHUB_SSH_PORT: ${SOULROOM_SHELLHUB_SSH_PORT:-22222}
+      SHELLHUB_DOMAIN: ${SOULROOM_SHELLHUB_DOMAIN:-localhost}
+      ASYNQ_GROUP_MAX_DELAY: "1"
+      ASYNQ_GROUP_GRACE_PERIOD: "2"
+      ASYNQ_GROUP_MAX_SIZE: "1000"
+      ASYNQ_UNIQUENESS_TIMEOUT: "24"
+      REDIS_CACHE_POOL_SIZE: "0"
+      MAXIMUM_ACCOUNT_LOCKOUT: "60"
+      METRICS: "false"
+      SHELLHUB_INTERNAL_HTTP_CLIENT_RETRY_COUNT: "3"
+      SHELLHUB_INTERNAL_HTTP_CLIENT_RETRY_WAIT_TIME: "5"
+      SHELLHUB_INTERNAL_HTTP_CLIENT_RETRY_MAX_WAIT_TIME: "20"
+      SHELLHUB_INTERNAL_HTTP_CLIENT_API_BASE_URL: http://shellhub-api:8080
+    volumes:
+      - shellhub-keys:/keys:ro
+    networks:
+      default:
+        aliases: [api]
+    depends_on:
+      shellhub-keygen:
+        condition: service_completed_successfully
+      shellhub-postgres:
+        condition: service_healthy
+      shellhub-redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  shellhub-ui:
+    image: shellhubio/ui:${SOULROOM_SHELLHUB_VERSION:-v0.26.0}
+    restart: unless-stopped
+    environment:
+      SHELLHUB_ENTERPRISE: "false"
+      SHELLHUB_CLOUD: "false"
+      SHELLHUB_VERSION: ${SOULROOM_SHELLHUB_VERSION:-v0.26.0}
+      SHELLHUB_SENTRY_DSN: ""
+      SHELLHUB_ONBOARDING_URL: ""
+      SHELLHUB_ANNOUNCEMENTS: "false"
+    networks:
+      default:
+        aliases: [ui]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  shellhub-ssh:
+    image: shellhubio/ssh:${SOULROOM_SHELLHUB_VERSION:-v0.26.0}
+    restart: unless-stopped
+    environment:
+      PRIVATE_KEY: /keys/ssh_private_key
+      SHELLHUB_ENTERPRISE: "false"
+      SHELLHUB_CLOUD: "false"
+      SHELLHUB_LOG_LEVEL: info
+      SHELLHUB_LOG_FORMAT: text
+      ALLOW_PUBLIC_KEY_ACCESS_BELLOW_0_6_0: "false"
+      SHELLHUB_INTERNAL_HTTP_CLIENT_RETRY_COUNT: "3"
+      SHELLHUB_INTERNAL_HTTP_CLIENT_RETRY_WAIT_TIME: "5"
+      SHELLHUB_INTERNAL_HTTP_CLIENT_RETRY_MAX_WAIT_TIME: "20"
+      SHELLHUB_INTERNAL_HTTP_CLIENT_API_BASE_URL: http://shellhub-api:8080
+    ports:
+      - "${SOULROOM_SHELLHUB_SSH_PORT:-22222}:2222"
+    volumes:
+      - shellhub-keys:/keys:ro
+    networks:
+      default:
+        aliases: [ssh]
+    depends_on:
+      shellhub-keygen:
+        condition: service_completed_successfully
+      shellhub-api:
+        condition: service_healthy
+      shellhub-redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  shellhub-gateway:
+    image: shellhubio/gateway:${SOULROOM_SHELLHUB_VERSION:-v0.26.0}
+    restart: unless-stopped
+    environment:
+      SHELLHUB_LOG_LEVEL: info
+      SHELLHUB_LOG_FORMAT: text
+      SHELLHUB_DOMAIN: ${SOULROOM_SHELLHUB_DOMAIN:-localhost}
+      SHELLHUB_VERSION: ${SOULROOM_SHELLHUB_VERSION:-v0.26.0}
+      SHELLHUB_SSH_PORT: ${SOULROOM_SHELLHUB_SSH_PORT:-22222}
+      SHELLHUB_PROXY: "false"
+      SHELLHUB_ENTERPRISE: "false"
+      SHELLHUB_CLOUD: "false"
+      SHELLHUB_AUTO_SSL: "false"
+      SHELLHUB_API_RATE_LIMIT: 1000r/s
+      SHELLHUB_API_RATE_LIMIT_ZONE_SIZE: 10m
+      SHELLHUB_API_BURST_SIZE: "100"
+      SHELLHUB_API_BURST_DELAY: nodelay
+      SHELLHUB_GATEWAY_ACCESS_LOGS: "true"
+      SHELLHUB_DATABASE: postgres
+    ports:
+      - "${SOULROOM_SHELLHUB_HTTP_PORT:-8088}:80"
+    depends_on:
+      shellhub-api:
+        condition: service_healthy
+      shellhub-ui:
+        condition: service_healthy
+      shellhub-ssh:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
   backup:
-    image: postgres:16
+    image: postgres:18.0
     profiles: ["maintenance"]
     environment:
-      PGPASSWORD: local-dev-only
+      SOULROOM_POSTGRES_PASSWORD: local-dev-only
+      SHELLHUB_POSTGRES_PASSWORD: ${SOULROOM_SHELLHUB_POSTGRES_PASSWORD:-shellhub-local-dev-only}
     volumes:
       - app-data:/source/app:ro
       - minio-data:/source/minio:ro
+      - shellhub-keys:/source/shellhub-keys:ro
       - ./backups:/backup
     depends_on:
       postgres:
+        condition: service_healthy
+      shellhub-postgres:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -eu
         stamp=$$(date +%Y%m%d%H%M%S)
-        pg_dump -h postgres -U soul_room soul_room > /backup/postgres-$${stamp}.sql
-        tar czf /backup/data-$${stamp}.tgz -C /source app minio
+        PGPASSWORD="$${SOULROOM_POSTGRES_PASSWORD}" pg_dump -h postgres -U soul_room soul_room > /backup/postgres-$${stamp}.sql
+        PGPASSWORD="$${SHELLHUB_POSTGRES_PASSWORD}" pg_dump -h shellhub-postgres -U shellhub shellhub > /backup/shellhub-$${stamp}.sql
+        tar czf /backup/data-$${stamp}.tgz -C /source app minio shellhub-keys
         echo "Backup set: $${stamp}"
 
   restore:
-    image: postgres:16
+    image: postgres:18.0
     profiles: ["maintenance"]
     environment:
-      PGPASSWORD: local-dev-only
+      SOULROOM_POSTGRES_PASSWORD: local-dev-only
+      SHELLHUB_POSTGRES_PASSWORD: ${SOULROOM_SHELLHUB_POSTGRES_PASSWORD:-shellhub-local-dev-only}
       BACKUP_SET: ${BACKUP_SET:-}
     volumes:
       - app-data:/source/app
       - minio-data:/source/minio
+      - shellhub-keys:/source/shellhub-keys
       - ./backups:/backup:ro
     depends_on:
       postgres:
+        condition: service_healthy
+      shellhub-postgres:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -eu
         test -n "$${BACKUP_SET}"
-        psql -h postgres -U soul_room soul_room < /backup/postgres-$${BACKUP_SET}.sql
+        PGPASSWORD="$${SOULROOM_POSTGRES_PASSWORD}" psql -h postgres -U soul_room soul_room < /backup/postgres-$${BACKUP_SET}.sql
+        PGPASSWORD="$${SHELLHUB_POSTGRES_PASSWORD}" psql -h shellhub-postgres -U shellhub shellhub < /backup/shellhub-$${BACKUP_SET}.sql
         tar xzf /backup/data-$${BACKUP_SET}.tgz -C /source
         echo "Restored backup set: $${BACKUP_SET}"
 
@@ -141,3 +328,5 @@ volumes:
   postgres-data:
   minio-data:
   app-data:
+  shellhub-postgres-data:
+  shellhub-keys:

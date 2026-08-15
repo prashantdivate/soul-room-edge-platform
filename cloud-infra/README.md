@@ -17,7 +17,7 @@ Implemented in this repository:
 * actual GPSD, fixed-site, and operator-managed device locations with fleet map
 * typed jobs and offline-device queue semantics
 * tenant-scoped team accounts with built-in roles and password hashing
-* audited ShellHub remote-access integration
+* bundled self-hosted ShellHub Community Edition with audited launch integration
 * audit log
 * artifacts, applications, deployments, OS release plans, pilot-group Flatpak updates, alerts and quotas
 * protocol contracts, OpenAPI sketch, PostgreSQL migrations
@@ -36,9 +36,11 @@ S3-compatible object storage.
 docker compose up --build -d
 ```
 
-Then open `http://localhost:3080`. The local Compose stack starts and seeds every
-required service automatically; no operating-system-specific scripts are
-required.
+Then open `http://localhost:3080`. ShellHub administration is available at
+`http://localhost:8088`, and its SSH gateway uses port `22222`. The local Compose
+stack starts every required service automatically; no operating-system-specific
+scripts are required. ShellHub still requires its secure one-time web setup to
+create its first administrator and namespace.
 
 See `docs/RUNNING_LOCALLY.md` for device connectivity and local credentials.
-See `docs/SHELLHUB_INTEGRATION.md` before enabling remote SSH.
+See `docs/SHELLHUB_INTEGRATION.md` before enrolling a remote-access device.

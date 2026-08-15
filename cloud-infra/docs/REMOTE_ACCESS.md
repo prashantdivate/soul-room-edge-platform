@@ -1,10 +1,23 @@
-# Remote Access
+# Remote Access Security Boundary
 
-Production remote shell and arbitrary port forwarding are not implemented.
+Interactive maintenance is delegated to the bundled self-hosted ShellHub
+Community Edition stack. The Soul Room device protocol does not accept arbitrary
+shell commands, and the fleet agent never opens an inbound device port.
 
-Future remote access must use short-lived sessions, explicit device and port
-scope, requesting user identity, authorization checks, optional approval,
-unique device credentials, session-specific credentials, automatic expiry,
-tunnel-only accounts, no reusable shared keys, no interactive shell, no PTY, no
-agent forwarding, no X11 forwarding, tenant-isolated routing, rate limiting,
-connection audit, session termination, and DMZ-capable deployment.
+Soul Room verifies tenant membership and `remote.session.create` permission,
+requires a tenant-owned device with an explicitly mapped ShellHub SSHID, and
+writes a `remote_access.requested` audit event before returning the local
+ShellHub portal and SSH command.
+
+ShellHub owns the outbound reverse tunnel, Linux authentication, public keys,
+firewall rules, and device acceptance. Operators must use short sessions,
+public-key authentication, least-privileged Linux users, and a reviewed firewall
+policy. Soul Room does not store Linux passwords or operator private keys.
+
+Shared SSO, automatic namespace/device mapping, approval workflows, and
+short-lived session brokering remain deferred. Production deployments require
+trusted HTTPS, WebSocket-aware proxying, monitored backups, rate limiting, and
+an edition of ShellHub that provides any promised enterprise audit, recording,
+MFA, or HA capability.
+
+See `SHELLHUB_INTEGRATION.md` for installation and operation.

@@ -18,6 +18,9 @@ SOULROOM_ORGANIZATION_NAME=Acme Devices
 SOULROOM_ORGANIZATION_SLUG=acme-devices
 SOULROOM_ADMIN_EMAIL=admin@acme.com
 SOULROOM_ADMIN_PASSWORD=replace-with-a-long-unique-password
+SOULROOM_SHELLHUB_DOMAIN=localhost
+SOULROOM_SHELLHUB_URL=http://localhost:8088
+SOULROOM_SHELLHUB_POSTGRES_PASSWORD=replace-with-a-long-unique-password
 ```
 
 Open `http://localhost:3080` and sign in with that owner account. These values
@@ -25,8 +28,11 @@ are used only when the data volume is empty; normal restarts never reset the
 owner password.
 
 Compose starts the web console, control API, device gateway, worker, PostgreSQL,
-MinIO, and Mailpit. On the first run it creates only the local administrator and
-organization. Devices and fleet activity appear only after a real agent enrolls.
+MinIO, Mailpit, and the pinned ShellHub Community Edition stack. On the first
+run it creates only the Soul Room administrator and organization. ShellHub uses
+its own security boundary and asks you to create its administrator and namespace
+at `http://localhost:8088/setup`. Devices and fleet activity appear only after
+a real agent enrolls.
 
 ## Stop
 
@@ -48,8 +54,9 @@ Create a timestamped local backup set in `cloud-infra/backups`:
 docker compose --profile maintenance run --rm backup
 ```
 
-The command prints the backup-set timestamp. Restore that set with the same
-command on Windows, Linux, or macOS:
+The backup includes Soul Room state, MinIO data, ShellHub PostgreSQL records,
+and ShellHub signing keys. The command prints the backup-set timestamp. Restore
+that set with the same command on Windows, Linux, or macOS:
 
 ```text
 docker compose --profile maintenance run --rm -e BACKUP_SET=YYYYmmddHHMMSS restore
@@ -67,6 +74,8 @@ and audit history afterward.
 | Device gateway | `https://localhost:8443` |
 | MinIO console | `http://localhost:9001` |
 | Mailpit | `http://localhost:8025` |
+| ShellHub portal | `http://localhost:8088` |
+| ShellHub SSH gateway | `localhost:22222` |
 
 ## Connect a Physical Device
 
@@ -82,10 +91,25 @@ this computer:
 
 ```text
 SOULROOM_DEVICE_PUBLIC_HOST=192.168.1.20
+SOULROOM_SHELLHUB_DOMAIN=localhost
+SOULROOM_SHELLHUB_URL=http://192.168.1.20:8088
 ```
 
 Docker Compose reads this file on Windows, Linux, and macOS. It ensures the
 gateway certificate matches the address used by the device.
+
+## Initialize Remote Access
+
+1. Open `http://localhost:8088/setup` and create the ShellHub administrator.
+2. Create a ShellHub namespace and copy its tenant ID.
+3. Follow `SHELLHUB_INTEGRATION.md` to install the ShellHub agent on the device.
+4. Accept the pending device in ShellHub and copy its SSHID.
+5. Save that SSHID against the same device on Soul Room's **Remote access** page.
+
+ShellHub keys and database records live in the `shellhub-keys` and
+`shellhub-postgres-data` named volumes. Normal rebuilds and `docker compose down`
+preserve them. `docker compose down -v` permanently removes both Soul Room and
+ShellHub local data.
 
 ## Development Note
 

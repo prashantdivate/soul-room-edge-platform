@@ -21,6 +21,8 @@ type Config struct {
 	SignupEnabled    bool
 	MaxPayloadBytes  int64
 	ShellHubURL      string
+	ShellHubSSHPort  int
+	ShellHubManaged  bool
 }
 
 func Load() Config {
@@ -39,6 +41,8 @@ func Load() Config {
 		SignupEnabled:    getenv("SOULROOM_SIGNUP_ENABLED", "false") == "true",
 		MaxPayloadBytes:  int64(integer("SOULROOM_MAX_PAYLOAD_BYTES", 2*1024*1024)),
 		ShellHubURL:      getenv("SOULROOM_SHELLHUB_URL", ""),
+		ShellHubSSHPort:  integer("SOULROOM_SHELLHUB_SSH_PORT", 22),
+		ShellHubManaged:  getenv("SOULROOM_SHELLHUB_MANAGED", "false") == "true",
 	}
 }
 

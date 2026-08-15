@@ -16,6 +16,7 @@ import {
   Cpu,
   Database,
   Download,
+  ExternalLink,
   FileJson,
   FileText,
   Eye,
@@ -616,7 +617,17 @@ function RemoteAccess({ data, onData }: ViewProps) {
   const [message, setMessage] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   React.useEffect(() => { setSSHId(device?.remote_access_id || ""); }, [device?.id, device?.remote_access_id]);
-  if (!device) return <EmptySection icon={<Network size={28} />} title="No remote targets" text="Enroll a device before configuring remote access." />;
+  function openShellHub() { window.open(data.platform.remote_access_url, "_blank", "noopener,noreferrer"); }
+  if (!device) return <>
+    <section className="remoteHero">
+      <div className="remoteHeroIcon"><TerminalSquare size={26} /></div>
+      <div><span className="overline">Included ShellHub gateway</span><h2>Remote access is ready for setup</h2><p>Create the ShellHub administrator and namespace, then enroll your first fleet device.</p></div>
+      <Badge value="included" />
+    </section>
+    <Panel title="ShellHub administration" subtitle="One-time setup for the remote-access service included with Soul Room">
+      <div className="emptyAction"><p>Open the local ShellHub portal, complete its setup wizard, and keep the generated tenant ID for the device agent.</p><button className="button primary" onClick={openShellHub}><ExternalLink size={16} /> Open ShellHub portal</button></div>
+    </Panel>
+  </>;
   async function saveMapping() {
     setSaving(true); setMessage("");
     try { const updated = await updateDevice(data.membership, device.id, { remote_access_id: sshId.trim() }); onData({ ...data, devices: data.devices.map((item) => item.id === updated.id ? updated : item) }); setMessage("ShellHub identity saved."); }
@@ -634,8 +645,8 @@ function RemoteAccess({ data, onData }: ViewProps) {
   return <>
     <section className="remoteHero">
       <div className="remoteHeroIcon"><TerminalSquare size={26} /></div>
-      <div><span className="overline">ShellHub gateway</span><h2>Audited remote maintenance</h2><p>Device connections stay outbound-only; ShellHub owns SSH keys, firewall policy, and session records.</p></div>
-      <Badge value={data.platform.remote_access_configured ? "configured" : "configuration required"} />
+      <div><span className="overline">Included ShellHub gateway</span><h2>Audited remote maintenance</h2><p>Device connections stay outbound-only; the bundled ShellHub service owns SSH keys, firewall policy, and session records.</p></div>
+      <button className="button secondary" onClick={openShellHub}><ExternalLink size={16} /> ShellHub portal</button>
     </section>
     <section className="remoteLayout">
       <Panel title="Open a terminal" subtitle="Select an online device and its existing Linux user">
@@ -648,10 +659,9 @@ function RemoteAccess({ data, onData }: ViewProps) {
         </div>
       </Panel>
       <Panel title="Device mapping" subtitle="Associate this fleet record with the SSHID shown by ShellHub">
-        <div className="remoteForm"><label>ShellHub SSHID<input value={sshId} onChange={(event) => setSSHId(event.target.value)} placeholder="device.namespace@ssh.example.com" /></label><button className="button successButton" onClick={saveMapping} disabled={saving || !sshId.trim()}><Save size={16} />{saving ? "Saving..." : "Save mapping"}</button><div className="remoteChecklist"><div className={device.presence === "connected" ? "done" : ""}><Check size={15} /><span>Fleet agent online</span></div><div className={Boolean(device.remote_access_id) ? "done" : ""}><Check size={15} /><span>ShellHub device accepted</span></div><div className={data.platform.remote_access_configured ? "done" : ""}><Check size={15} /><span>Gateway URL configured</span></div></div></div>
+        <div className="remoteForm"><label>ShellHub SSHID<input value={sshId} onChange={(event) => setSSHId(event.target.value)} placeholder="namespace.device@your-shellhub-host" /></label><button className="button successButton" onClick={saveMapping} disabled={saving || !sshId.trim()}><Save size={16} />{saving ? "Saving..." : "Save mapping"}</button><div className="remoteChecklist"><div className={device.presence === "connected" ? "done" : ""}><Check size={15} /><span>Fleet agent online</span></div><div className={Boolean(device.remote_access_id) ? "done" : ""}><Check size={15} /><span>ShellHub device accepted</span></div><div className={data.platform.remote_access_managed ? "done" : ""}><Check size={15} /><span>Local ShellHub service included</span></div></div></div>
       </Panel>
     </section>
-    {!data.platform.remote_access_configured && <div className="safetyBanner warning"><Settings2 size={20} /><div><strong>Set the ShellHub endpoint</strong><span>Add <code>SOULROOM_SHELLHUB_URL=https://shellhub.example.com</code> to the Compose environment and recreate the platform container.</span></div></div>}
   </>;
 }
 

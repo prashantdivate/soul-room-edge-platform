@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"strconv"
 	"strings"
 	"time"
 
@@ -85,6 +86,8 @@ func (s *Server) platformInfo(w http.ResponseWriter, r *http.Request) {
 		"remote_access_provider":   "shellhub",
 		"remote_access_url":        s.Config.ShellHubURL,
 		"remote_access_configured": s.Config.ShellHubURL != "",
+		"remote_access_managed":    s.Config.ShellHubManaged,
+		"remote_access_ssh_port":   s.Config.ShellHubSSHPort,
 	})
 }
 
@@ -505,8 +508,13 @@ func (s *Server) remoteAccess(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "invalid_ssh_identity", "SSH user or ShellHub SSHID is invalid")
 		return
 	}
+	sshCommand := "ssh "
+	if s.Config.ShellHubSSHPort != 22 {
+		sshCommand += "-p " + strconv.Itoa(s.Config.ShellHubSSHPort) + " "
+	}
+	sshCommand += req.User + "@" + device.RemoteAccessID
 	audit.Record(s.Store, tc, "remote_access.requested", "device", device.ID, "success", map[string]string{"provider": "shellhub", "user": req.User})
-	writeJSON(w, http.StatusCreated, map[string]string{"provider": "shellhub", "launch_url": s.Config.ShellHubURL, "ssh_command": "ssh " + req.User + "@" + device.RemoteAccessID})
+	writeJSON(w, http.StatusCreated, map[string]string{"provider": "shellhub", "launch_url": s.Config.ShellHubURL, "ssh_command": sshCommand})
 }
 
 func (s *Server) telemetryQuery(w http.ResponseWriter, r *http.Request) {

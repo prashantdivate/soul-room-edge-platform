@@ -36,4 +36,5 @@
 
 * TPM and secure-element implementations are interfaces in this MVP.
 * SQLite and protobuf generated bindings are deferred.
-* Remote access tunnel is not implemented.
+* Remote access is outside the fleet-agent protocol and uses a separately
+  installed ShellHub agent with its own trust and update boundary.

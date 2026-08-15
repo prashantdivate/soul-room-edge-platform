@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./cloud-infra/web/public/soul-room-mark.svg" width="76" alt="Soul Room logo">
+  <img src="./cloud-infra/web/public/soul-room-mark.png" width="220" alt="Soul Room logo">
   <h1>Soul Room</h1>
   <p><strong>Open edge-fleet operations for Linux devices, gateways, and the software they run.</strong></p>
 </div>
@@ -18,7 +18,7 @@ operator workflow to Windows, Linux, or macOS.
 | Area | Capabilities |
 | --- | --- |
 | Fleet visibility | Real enrollment, device presence, hardware/OS inventory, telemetry, downstream gateways, and actual device locations |
-| Operations | Typed jobs, offline delivery queue, diagnostics, bounded log collection, and ShellHub launch integration |
+| Operations | Typed jobs, offline delivery queue, diagnostics, bounded log collection, and bundled self-hosted ShellHub remote access |
 | Updates | Signed OS release plans for arm64/aarch64 and armv7, pilot-first Flatpak updates, exact OSTree commit pinning, and self-hosted `.flatpakrepo` descriptors |
 | Software posture | Installed Debian/RPM package inventory and optional Trivy-backed OS vulnerability advisory scans |
 | Governance | Tenant isolation, built-in RBAC, team-user creation, server-side sessions, and append-oriented audit activity |
@@ -33,6 +33,7 @@ agent reports data.
 flowchart LR
     subgraph Edge["Linux edge device"]
         A["Soul Room agent"]
+        R["ShellHub agent"]
         I["Inventory and telemetry"]
         J["Typed job handlers"]
         A --- I
@@ -47,8 +48,9 @@ flowchart LR
     end
     UI["React operations console"] --> API
     A -->|"outbound HTTPS + device certificate"| G
+    R -->|"outbound secure WebSocket"| SH["Bundled ShellHub gateway"]
     API -->|"queued operations"| G
-    API -.->|"audited session launch"| SH["ShellHub"]
+    API -.->|"RBAC + audited launch"| SH
 ```
 
 The agent initiates every control-plane connection. Device private keys are
@@ -78,7 +80,10 @@ docker compose -f cloud-infra/compose.yaml up --build -d
 Open [http://localhost:3080](http://localhost:3080) and sign in with the owner
 account configured in `cloud-infra/.env`.
 
-Compose starts the console, API/device gateway, PostgreSQL, MinIO, and Mailpit.
+Compose starts the console, API/device gateway, PostgreSQL, MinIO, Mailpit, and
+the pinned ShellHub Community Edition services. ShellHub is available at
+[http://localhost:8088](http://localhost:8088); complete its setup wizard once
+before adding remote-access devices. Its SSH gateway listens on port `22222`.
 It creates only the configured administrator and organization. Bootstrap
 credentials are applied only to a clean installation and are not reapplied on
 normal restarts. Stop it with:
@@ -127,6 +132,23 @@ The service runs in the system service context and does not create or require a
 dedicated Linux account. Follow the complete
 [embedded Linux installation guide](./agent/docs/EMBEDDED_LINUX_INSTALLATION.md) or the
 [Yocto/i.MX8MP guide](./agent/docs/RUNNING_ON_YOCTO_IMX8MP.md).
+
+## Remote Access With ShellHub
+
+Soul Room includes a self-hosted ShellHub Community Edition deployment. No
+external ShellHub URL is required. On first startup:
+
+1. Open [http://localhost:8088/setup](http://localhost:8088/setup).
+2. Create the ShellHub administrator and first namespace.
+3. Install the ShellHub agent on the device using the tenant ID shown by that namespace.
+4. Accept the pending device in ShellHub and copy its SSHID.
+5. In Soul Room, open **Remote access**, select the matching fleet device, and save the SSHID.
+
+The Soul Room agent and ShellHub agent are separate services: the former owns
+fleet telemetry, jobs, and OTA; the latter owns the outbound remote-shell
+tunnel. Soul Room checks RBAC and writes an audit event before handing the
+operator to ShellHub. See the [complete ShellHub guide](./cloud-infra/docs/SHELLHUB_INTEGRATION.md)
+for Ubuntu, Yocto, networking, persistence, and production TLS requirements.
 
 ## Self-Hosted Flatpak Updates
 
@@ -221,8 +243,8 @@ fleet data matters.
 
 The strongest next investments are production PostgreSQL/S3 adapters, signed
 artifact upload and provenance, phased OS-adapter execution, SSO/MFA, alert
-routing, policy-as-code, software bill-of-material ingestion, and an audited
-ShellHub deployment profile. The implemented/deferred matrices remain the source
+routing, policy-as-code, software bill-of-material ingestion, and deeper
+ShellHub API/identity automation. The implemented/deferred matrices remain the source
 of truth while those areas evolve.
 
 ## License

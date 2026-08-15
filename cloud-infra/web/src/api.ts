@@ -102,7 +102,7 @@ export type Organization = { id: string; name: string; slug: string };
 export type InstalledPackage = { name: string; version: string; architecture?: string; source: string };
 export type InventoryFacts = Record<string, unknown> & { installed_packages?: InstalledPackage[] };
 export type Inventory = Record<string, InventoryFacts>;
-export type PlatformInfo = { device_gateway_endpoint: string; remote_access_provider: string; remote_access_url: string; remote_access_configured: boolean };
+export type PlatformInfo = { device_gateway_endpoint: string; remote_access_provider: string; remote_access_url: string; remote_access_configured: boolean; remote_access_managed: boolean; remote_access_ssh_port: number };
 
 export type OTACampaign = {
   id: string;

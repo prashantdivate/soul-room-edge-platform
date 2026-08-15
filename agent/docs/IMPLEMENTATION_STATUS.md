@@ -28,5 +28,6 @@
 * TPM 2.0 and secure-element concrete integrations.
 * Full Docker Engine HTTP API implementation beyond policy-safe command hooks.
 * Production OSTree, Mender, RAUC, SWUpdate, and MCU bootloader adapters.
-* Production remote access tunnel, intentionally excluded from MVP.
+* Native remote shell in `edge-agent`, intentionally excluded; the platform
+  delegates optional remote access to a separate ShellHub agent.
 * SELinux/AppArmor profiles beyond guidance.

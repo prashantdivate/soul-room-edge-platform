@@ -431,6 +431,41 @@ select:focus, input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px va
 .detailList > div:last-child { border-bottom: 0; }
 .detailList dt { color: #7f8c97; font-size: 10px; }
 .detailList dd { margin: 0; color: #334452; font-size: 11px; font-weight: 600; overflow-wrap: anywhere; }
+.settingsSummary { min-height: 76px; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 16px; border: 1px solid #cfe0e6; border-left: 4px solid var(--brand); border-radius: 7px; color: #334b56; background: #f7fbfc; }
+.settingsSummaryIcon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 6px; color: #fff; background: var(--brand); }
+.settingsSummary strong, .settingsSummary p { display: block; }
+.settingsSummary strong { font-size: 12px; }
+.settingsSummary p { max-width: 760px; margin-top: 3px; color: #6f8088; font-size: 10px; line-height: 1.5; }
+.settingsSummary > span { color: #6f8088; font-size: 9px; white-space: nowrap; }
+.settingsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 18px; }
+.settingsGrid.threeColumns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.settingsGrid label { min-width: 0; display: grid; align-content: start; gap: 7px; color: #405360; font-size: 10px; font-weight: 750; }
+.settingsGrid label > input, .settingsGrid label > select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #cdd7dd; border-radius: 6px; outline: 0; background: #fff; }
+.settingsGrid label > input:focus, .settingsGrid label > select:focus, .domainInput:focus-within, .numberInput:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(43,116,132,.1); }
+.settingsGrid input:disabled, .settingsGrid select:disabled { color: #7c8991; background: #f3f5f6; cursor: not-allowed; }
+.settingsGrid label > small { min-height: 28px; color: #829099; font-size: 9px; font-weight: 500; line-height: 1.45; }
+.optionalLabel { color: #88959d; font-size: 8px; font-weight: 600; }
+.domainInput, .numberInput { min-width: 0; height: 38px; display: flex; align-items: center; overflow: hidden; border: 1px solid #cdd7dd; border-radius: 6px; background: #fff; }
+.domainInput > span, .numberInput > span { height: 100%; display: flex; align-items: center; padding: 0 10px; color: #73838c; background: #f3f6f7; font-size: 9px; font-weight: 650; white-space: nowrap; }
+.domainInput input, .numberInput input { min-width: 0; height: 100%; flex: 1; padding: 0 10px; border: 0; outline: 0; background: transparent; }
+.numberInput input { width: 80px; }
+.settingsRange { min-height: 38px; padding: 0 2px; }
+.settingsRange input { min-width: 0; }
+.settingsActions { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 14px; padding: 12px 16px; border: 1px solid #d8e0e4; border-radius: 7px; background: #fff; }
+.settingsActions strong, .settingsActions span { display: block; }
+.settingsActions strong { font-size: 10px; }
+.settingsActions span { margin-top: 3px; color: #7e8b94; font-size: 9px; }
+.settingsActions > div:last-child { display: flex; gap: 8px; }
+.environmentSettings { padding: 0 16px; }
+.environmentSettings > div { min-height: 60px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 11px; border-bottom: 1px solid #e8edef; }
+.environmentSettings > div:last-child { border-bottom: 0; }
+.environmentIcon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 5px; color: #557280; background: #edf3f5; }
+.environmentSettings strong, .environmentSettings code { display: block; }
+.environmentSettings strong { font-size: 10px; }
+.environmentSettings code { max-width: 720px; margin-top: 3px; overflow: hidden; color: #71818b; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.successNotice { display: flex; align-items: center; gap: 8px; margin-top: 12px; border-left-color: #249669; color: #286f57; background: #eff8f4; }
+.warningNotice { border-color: #eadcb7; color: #775c22; background: #fffaf0; }
+.warningNotice span { color: #806f4c; }
 
 .overlay { position: fixed; inset: 0; z-index: 2000; display: flex; justify-content: flex-end; background: rgba(21,32,42,.42); backdrop-filter: blur(1px); isolation: isolate; }
 .drawer { width: min(460px, 100%); height: 100%; overflow-y: auto; background: #fff; box-shadow: -12px 0 36px rgba(18,28,37,.15); }
@@ -591,6 +626,7 @@ select:focus, input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px va
   .otaReadiness > .button { grid-column: 1 / -1; justify-self: start; }
   .overviewAvailability { grid-template-columns: 1fr; }
   .availabilityCopy { padding: 0 24px 24px; }
+  .settingsGrid.threeColumns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 620px) {
@@ -632,4 +668,12 @@ select:focus, input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px va
   .packageSummary .metric, .packageSummary .metric:nth-child(2) { border-right: 0; border-bottom: 1px solid #e2e7eb; }
   .packageSummary .metric:last-child { border-bottom: 0; }
   .packageFilter input { width: 120px; }
+  .settingsSummary { grid-template-columns: 36px 1fr; }
+  .settingsSummary > span { grid-column: 2; }
+  .settingsGrid, .settingsGrid.threeColumns { grid-template-columns: 1fr; }
+  .settingsActions { align-items: stretch; flex-direction: column; }
+  .settingsActions > div:last-child { flex-direction: column-reverse; }
+  .settingsActions .button { width: 100%; }
+  .environmentSettings > div { grid-template-columns: 34px minmax(0, 1fr); padding: 10px 0; }
+  .environmentSettings .badge { grid-column: 2; justify-self: start; }
 }

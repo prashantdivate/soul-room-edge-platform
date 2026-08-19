@@ -23,6 +23,7 @@ import (
 	"github.com/soul-room/cloud-infra/internal/ota"
 	"github.com/soul-room/cloud-infra/internal/protocol"
 	"github.com/soul-room/cloud-infra/internal/rbac"
+	platformsettings "github.com/soul-room/cloud-infra/internal/settings"
 	"github.com/soul-room/cloud-infra/internal/storage"
 	"github.com/soul-room/cloud-infra/internal/telemetry"
 	"github.com/soul-room/cloud-infra/internal/tenancy"
@@ -58,6 +59,7 @@ func (s *Server) ControlHandler() http.Handler {
 	mux.Handle("/api/v1/users", s.withAuth(http.HandlerFunc(s.users)))
 	mux.Handle("/api/v1/dev-ca", s.withAuth(http.HandlerFunc(s.devCA)))
 	mux.Handle("/api/v1/platform-info", s.withAuth(http.HandlerFunc(s.platformInfo)))
+	mux.Handle("/api/v1/platform-settings", s.withAuth(http.HandlerFunc(s.platformSettings)))
 	mux.Handle("/api/v1/deployments", s.withAuth(staticList("deployments")))
 	mux.Handle("/api/v1/applications", s.withAuth(staticList("applications")))
 	mux.Handle("/api/v1/artifacts", s.withAuth(http.HandlerFunc(s.artifacts)))
@@ -89,6 +91,80 @@ func (s *Server) platformInfo(w http.ResponseWriter, r *http.Request) {
 		"remote_access_managed":    s.Config.ShellHubManaged,
 		"remote_access_ssh_port":   s.Config.ShellHubSSHPort,
 	})
+}
+
+func (s *Server) platformSettings(w http.ResponseWriter, r *http.Request) {
+	tc, _ := tenancy.Require(r.Context())
+	if r.Method == http.MethodGet {
+		value, source := s.effectivePlatformSettings(tc)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"settings":   value,
+			"source":     source,
+			"can_manage": rbac.Authorize(r.Context(), rbac.TenantSettings) == nil,
+			"infrastructure": []map[string]any{
+				{"key": "device_gateway", "label": "Device gateway", "value": "https://" + s.Config.DevicePublicHost + ":8443", "restart_required": true},
+				{"key": "remote_access", "label": "Remote access", "value": firstNonEmpty(s.Config.ShellHubURL, "Not configured"), "restart_required": true},
+				{"key": "session_lifetime", "label": "Session lifetime", "value": s.Config.SessionTTL.String(), "restart_required": true},
+				{"key": "request_limit", "label": "Request size limit", "value": strconv.FormatInt(s.Config.MaxPayloadBytes, 10) + " bytes", "restart_required": true},
+			},
+		})
+		return
+	}
+	if err := rbac.Authorize(r.Context(), rbac.TenantSettings); err != nil {
+		errorJSON(w, http.StatusForbidden, "forbidden", "permission denied")
+		return
+	}
+	if r.Method == http.MethodDelete {
+		if err := s.Store.ResetPlatformSettings(tc); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "settings_reset_failed", err.Error())
+			return
+		}
+		audit.Record(s.Store, tc, "platform_settings.reset", "organization", tc.TenantID, "success", nil)
+		value, _ := s.effectivePlatformSettings(tc)
+		writeJSON(w, http.StatusOK, map[string]any{"settings": value, "source": "deployment", "can_manage": true})
+		return
+	}
+	if r.Method != http.MethodPut {
+		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	var value model.PlatformSettings
+	if err := decode(w, r, s.Config.MaxPayloadBytes, &value); err != nil {
+		errorJSON(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	value.OrganizationName = strings.TrimSpace(value.OrganizationName)
+	value.CompanyDomain = strings.ToLower(strings.TrimSpace(value.CompanyDomain))
+	if err := platformsettings.Validate(value); err != nil {
+		errorJSON(w, http.StatusBadRequest, "invalid_settings", err.Error())
+		return
+	}
+	if err := s.Store.SavePlatformSettings(tc, value); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "settings_save_failed", err.Error())
+		return
+	}
+	value, _ = s.effectivePlatformSettings(tc)
+	audit.Record(s.Store, tc, "platform_settings.updated", "organization", tc.TenantID, "success", map[string]string{"company_domain": value.CompanyDomain})
+	writeJSON(w, http.StatusOK, map[string]any{"settings": value, "source": "platform", "can_manage": true})
+}
+
+func (s *Server) effectivePlatformSettings(tc tenancy.Context) (model.PlatformSettings, string) {
+	if value, ok := s.Store.PlatformSettings(tc); ok {
+		return value, "platform"
+	}
+	organizationName := s.Config.OrganizationName
+	if organization, err := s.Store.Organization(tc); err == nil && organization.Name != "" {
+		organizationName = organization.Name
+	}
+	return model.PlatformSettings{
+		OrganizationName:          organizationName,
+		CompanyDomain:             s.Config.CompanyDomain,
+		DeviceOfflineMinutes:      s.Config.DeviceOfflineMinutes,
+		DefaultTelemetryWindow:    s.Config.DefaultTelemetryWindow,
+		DefaultOTAPilotPercent:    s.Config.DefaultOTAPilotPercent,
+		DefaultEnrollmentTTLHours: s.Config.DefaultEnrollmentTTLHours,
+		DefaultJobTTLMinutes:      s.Config.DefaultJobTTLMinutes,
+	}, "deployment"
 }
 
 func (s *Server) DeviceHandler() http.Handler {
@@ -210,7 +286,8 @@ func (s *Server) enrollmentTokens(w http.ResponseWriter, r *http.Request) {
 		TTL       string `json:"ttl"`
 	}
 	_ = decode(w, r, s.Config.MaxPayloadBytes, &req)
-	ttl := 24 * time.Hour
+	settings, _ := s.effectivePlatformSettings(tc)
+	ttl := time.Duration(settings.DefaultEnrollmentTTLHours) * time.Hour
 	if req.TTL != "" {
 		if parsed, err := time.ParseDuration(req.TTL); err == nil {
 			ttl = parsed
@@ -251,7 +328,15 @@ func (s *Server) devices(w http.ResponseWriter, r *http.Request) {
 	}
 	tc, _ := tenancy.Require(r.Context())
 	if r.Method == http.MethodGet {
-		writeJSON(w, http.StatusOK, map[string]any{"devices": s.Store.ListDevices(tc)})
+		devices := s.Store.ListDevices(tc)
+		settings, _ := s.effectivePlatformSettings(tc)
+		offlineAfter := time.Duration(settings.DeviceOfflineMinutes) * time.Minute
+		for index := range devices {
+			if !devices[index].LastSeenAt.IsZero() && time.Since(devices[index].LastSeenAt) > offlineAfter {
+				devices[index].Presence = "offline"
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"devices": devices})
 		return
 	}
 	if r.Method == http.MethodDelete {
@@ -572,7 +657,8 @@ func (s *Server) jobs(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	ttl := time.Hour
+	settings, _ := s.effectivePlatformSettings(tc)
+	ttl := time.Duration(settings.DefaultJobTTLMinutes) * time.Minute
 	if req.TTL != "" {
 		if d, err := time.ParseDuration(req.TTL); err == nil {
 			ttl = d

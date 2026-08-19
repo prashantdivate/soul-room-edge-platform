@@ -103,6 +103,19 @@ export type InstalledPackage = { name: string; version: string; architecture?: s
 export type InventoryFacts = Record<string, unknown> & { installed_packages?: InstalledPackage[] };
 export type Inventory = Record<string, InventoryFacts>;
 export type PlatformInfo = { device_gateway_endpoint: string; remote_access_provider: string; remote_access_url: string; remote_access_configured: boolean; remote_access_managed: boolean; remote_access_ssh_port: number };
+export type PlatformSettings = {
+  organization_name: string;
+  company_domain?: string;
+  device_offline_minutes: number;
+  default_telemetry_window: "15m" | "1h" | "24h";
+  default_ota_pilot_percent: number;
+  default_enrollment_ttl_hours: number;
+  default_job_ttl_minutes: number;
+  updated_by?: string;
+  updated_at?: string;
+};
+export type InfrastructureSetting = { key: string; label: string; value: string; restart_required: boolean };
+export type PlatformSettingsResponse = { settings: PlatformSettings; source: "deployment" | "platform"; can_manage: boolean; infrastructure?: InfrastructureSetting[] };
 
 export type OTACampaign = {
   id: string;
@@ -145,6 +158,10 @@ export type FleetData = {
   deployments: Record<string, unknown>[];
   otaCampaigns: OTACampaign[];
   platform: PlatformInfo;
+  settings: PlatformSettings;
+  settingsSource: "deployment" | "platform";
+  canManageSettings: boolean;
+  infrastructureSettings: InfrastructureSetting[];
 };
 
 class ApiError extends Error {
@@ -184,7 +201,7 @@ export async function logout(): Promise<void> {
 export async function loadFleet(membership: Membership): Promise<FleetData> {
   const headers = { "X-Tenant-ID": membership.tenant_id };
   const get = <T,>(path: string) => request<T>(path, { headers });
-  const [orgs, devices, downstream, jobs, artifacts, audit, tokens, users, inventory, roles, applications, deployments, ota, platform] = await Promise.all([
+  const [orgs, devices, downstream, jobs, artifacts, audit, tokens, users, inventory, roles, applications, deployments, ota, platform, platformSettings] = await Promise.all([
     get<{ organizations: Organization[] }>("/api/v1/organizations"),
     get<{ devices: Device[] }>("/api/v1/devices"),
     get<{ downstream: Downstream[] }>("/api/v1/downstream"),
@@ -199,6 +216,7 @@ export async function loadFleet(membership: Membership): Promise<FleetData> {
     get<{ deployments: Record<string, unknown>[] }>("/api/v1/deployments"),
     get<{ ota_campaigns: OTACampaign[] }>("/api/v1/ota"),
     get<PlatformInfo>("/api/v1/platform-info"),
+    get<PlatformSettingsResponse>("/api/v1/platform-settings"),
   ]);
   const deviceList = devices.devices || [];
   const metrics = (
@@ -221,14 +239,18 @@ export async function loadFleet(membership: Membership): Promise<FleetData> {
     deployments: deployments.deployments || [],
     otaCampaigns: ota.ota_campaigns || [],
     platform,
+    settings: platformSettings.settings,
+    settingsSource: platformSettings.source,
+    canManageSettings: platformSettings.can_manage,
+    infrastructureSettings: platformSettings.infrastructure || [],
   };
 }
 
-export async function createJob(membership: Membership, deviceId: string, type: string): Promise<Job> {
+export async function createJob(membership: Membership, deviceId: string, type: string, ttlMinutes: number): Promise<Job> {
   return request<Job>("/api/v1/jobs", {
     method: "POST",
     headers: { "X-Tenant-ID": membership.tenant_id, "Idempotency-Key": crypto.randomUUID() },
-    body: JSON.stringify({ device_id: deviceId, type, payload: { requested_from: "web-console" }, ttl: "1h" }),
+    body: JSON.stringify({ device_id: deviceId, type, payload: { requested_from: "web-console" }, ttl: `${ttlMinutes}m` }),
   });
 }
 
@@ -291,6 +313,21 @@ export async function createTeamUser(membership: Membership, email: string, pass
     method: "POST",
     headers: { "X-Tenant-ID": membership.tenant_id },
     body: JSON.stringify({ email, password, role }),
+  });
+}
+
+export async function updatePlatformSettings(membership: Membership, settings: PlatformSettings): Promise<PlatformSettingsResponse> {
+  return request<PlatformSettingsResponse>("/api/v1/platform-settings", {
+    method: "PUT",
+    headers: { "X-Tenant-ID": membership.tenant_id },
+    body: JSON.stringify(settings),
+  });
+}
+
+export async function resetPlatformSettings(membership: Membership): Promise<PlatformSettingsResponse> {
+  return request<PlatformSettingsResponse>("/api/v1/platform-settings", {
+    method: "DELETE",
+    headers: { "X-Tenant-ID": membership.tenant_id },
   });
 }
 

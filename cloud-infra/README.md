@@ -43,5 +43,14 @@ stack starts every required service automatically; no operating-system-specific
 scripts are required. ShellHub still requires its secure one-time web setup to
 create its first administrator and namespace.
 
+### Platform settings
+
+After signing in as the organization owner, open **Platform > On-prem admin >
+Platform settings** to configure organization identity, heartbeat presence,
+telemetry, rollout, enrollment, and job defaults. These settings are stored per
+organization and take effect without a container restart. `.env` remains
+optional for deployment defaults and required only for infrastructure values or
+secrets. See [On-premises administration](docs/ONPREM_ADMIN.md).
+
 See `docs/RUNNING_LOCALLY.md` for device connectivity and local credentials.
 See `docs/SHELLHUB_INTEGRATION.md` before enrolling a remote-access device.

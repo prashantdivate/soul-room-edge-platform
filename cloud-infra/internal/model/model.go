@@ -12,6 +12,18 @@ type Organization struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type PlatformSettings struct {
+	OrganizationName          string    `json:"organization_name"`
+	CompanyDomain             string    `json:"company_domain,omitempty"`
+	DeviceOfflineMinutes      int       `json:"device_offline_minutes"`
+	DefaultTelemetryWindow    string    `json:"default_telemetry_window"`
+	DefaultOTAPilotPercent    int       `json:"default_ota_pilot_percent"`
+	DefaultEnrollmentTTLHours int       `json:"default_enrollment_ttl_hours"`
+	DefaultJobTTLMinutes      int       `json:"default_job_ttl_minutes"`
+	UpdatedBy                 string    `json:"updated_by,omitempty"`
+	UpdatedAt                 time.Time `json:"updated_at,omitempty"`
+}
+
 type User struct {
 	ID               string    `json:"id"`
 	Email            string    `json:"email"`

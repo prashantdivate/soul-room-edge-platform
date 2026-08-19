@@ -19,6 +19,7 @@ operator workflow to Windows, Linux, or macOS.
 | --- | --- |
 | Fleet visibility | Real enrollment, device presence, hardware/OS inventory, telemetry, downstream gateways, and actual device locations |
 | Operations | Typed jobs, offline delivery queue, diagnostics, bounded log collection, and bundled self-hosted ShellHub remote access |
+| Administration | Tenant-isolated users, RBAC, audit history, backups, and UI-managed operational defaults with protected environment-managed secrets |
 | Updates | Capability-gated Mender, RAUC, OSTree, SWUpdate, Flatpak, and custom-plugin campaigns with signed artifacts, durable reboot recovery, health confirmation, rollback, and pilot-first delivery |
 | Software posture | Installed Debian/RPM package inventory and optional Trivy-backed OS vulnerability advisory scans |
 | Governance | Tenant isolation, built-in RBAC, team-user creation, server-side sessions, and append-oriented audit activity |
@@ -71,11 +72,19 @@ SOULROOM_ADMIN_EMAIL=admin@acme.com
 SOULROOM_ADMIN_PASSWORD=replace-with-a-long-unique-password
 ```
 
-From the repository root:
+From the repository root, use the launcher so you do not need to remember
+Compose arguments:
 
 ```bash
-docker compose -f cloud-infra/compose.yaml up --build -d
+# Linux or macOS
+sh platform.sh up
+
+# Windows Command Prompt or PowerShell
+platform.cmd up
 ```
+
+The same launcher supports `down`, `refresh`, `restart`, `status`, `logs`, and
+`doctor`. Run `sh platform.sh help` or `platform.cmd help` for examples.
 
 Open [http://localhost:3080](http://localhost:3080) and sign in with the owner
 account configured in `cloud-infra/.env`.

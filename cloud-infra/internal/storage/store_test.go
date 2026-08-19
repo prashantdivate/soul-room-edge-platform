@@ -149,3 +149,40 @@ func TestRebootingOTAJobIsRedeliveredUntilTerminal(t *testing.T) {
 		t.Fatal("terminal OTA job was delivered again")
 	}
 }
+
+func TestPlatformSettingsAreTenantIsolatedAndPersisted(t *testing.T) {
+	path := t.TempDir() + "/store.json"
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orgA, _ := store.CreateOrganization("Tenant A", "settings-a")
+	orgB, _ := store.CreateOrganization("Tenant B", "settings-b")
+	tcA := tenancy.Context{TenantID: orgA.ID, ActorID: "owner-a"}
+	tcB := tenancy.Context{TenantID: orgB.ID, ActorID: "owner-b"}
+	value := model.PlatformSettings{OrganizationName: "Tenant A Devices", DeviceOfflineMinutes: 7, DefaultTelemetryWindow: "15m", DefaultOTAPilotPercent: 5, DefaultEnrollmentTTLHours: 12, DefaultJobTTLMinutes: 30}
+	if err := store.SavePlatformSettings(tcA, value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := store.PlatformSettings(tcB); ok {
+		t.Fatal("tenant B received tenant A settings")
+	}
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := reopened.PlatformSettings(tcA)
+	if !ok || got.DeviceOfflineMinutes != 7 || got.UpdatedBy != "owner-a" || got.UpdatedAt.IsZero() {
+		t.Fatalf("settings were not persisted: %+v", got)
+	}
+	organization, err := reopened.Organization(tcA)
+	if err != nil || organization.Name != "Tenant A Devices" {
+		t.Fatalf("organization identity was not updated: %+v err=%v", organization, err)
+	}
+	if err := reopened.ResetPlatformSettings(tcA); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reopened.PlatformSettings(tcA); ok {
+		t.Fatal("settings override was not reset")
+	}
+}

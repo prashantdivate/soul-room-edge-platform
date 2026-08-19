@@ -24,6 +24,10 @@
 * Capability-gated OTA campaigns for Mender, RAUC, OSTree, SWUpdate, Flatpak,
   and device-provided adapter plugins, with pilot-first delivery, explicit
   promotion, signed release metadata, and rebooting job state.
+* Tenant-scoped platform settings with owner-only RBAC, validation, persistent
+  UI overrides, deployment-default reset, audit events, and safe read-only
+  infrastructure visibility. Settings drive presence, telemetry, OTA,
+  enrollment, and job behavior rather than acting as UI-only preferences.
 
 ## Simulated or Interface-Only
 

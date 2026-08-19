@@ -43,6 +43,7 @@ type data struct {
 	Jobs             map[string]model.Job              `json:"jobs"`
 	Artifacts        map[string]model.Artifact         `json:"artifacts"`
 	OTACampaigns     map[string]ota.Campaign           `json:"ota_campaigns"`
+	PlatformSettings map[string]model.PlatformSettings `json:"platform_settings"`
 	Audit            []model.AuditEvent                `json:"audit"`
 }
 
@@ -93,6 +94,9 @@ func (d *data) init() {
 	}
 	if d.OTACampaigns == nil {
 		d.OTACampaigns = map[string]ota.Campaign{}
+	}
+	if d.PlatformSettings == nil {
+		d.PlatformSettings = map[string]model.PlatformSettings{}
 	}
 }
 
@@ -163,6 +167,48 @@ func (s *Store) ListOrganizations() []model.Organization {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+func (s *Store) Organization(tc tenancy.Context) (model.Organization, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	organization, ok := s.data.Organizations[tc.TenantID]
+	if !ok {
+		return model.Organization{}, ErrNotFound
+	}
+	return organization, nil
+}
+
+func (s *Store) PlatformSettings(tc tenancy.Context) (model.PlatformSettings, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	value, ok := s.data.PlatformSettings[tc.TenantID]
+	return value, ok
+}
+
+func (s *Store) SavePlatformSettings(tc tenancy.Context, value model.PlatformSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	organization, ok := s.data.Organizations[tc.TenantID]
+	if !ok {
+		return ErrNotFound
+	}
+	organization.Name = value.OrganizationName
+	s.data.Organizations[tc.TenantID] = organization
+	value.UpdatedBy = tc.ActorID
+	value.UpdatedAt = time.Now()
+	s.data.PlatformSettings[tc.TenantID] = value
+	return s.saveLocked()
+}
+
+func (s *Store) ResetPlatformSettings(tc tenancy.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data.Organizations[tc.TenantID]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data.PlatformSettings, tc.TenantID)
+	return s.saveLocked()
 }
 
 func (s *Store) CreateUser(email, passwordHash string) (model.User, error) {

@@ -122,6 +122,22 @@ paths:
       responses:
         "201": { description: OTA campaign created }
         "400": { description: Invalid release metadata or incompatible target }
+  /platform-settings:
+    get:
+      summary: Read effective tenant settings and safe infrastructure metadata
+      responses:
+        "200": { description: Effective platform settings and their source }
+    put:
+      summary: Replace the tenant platform-settings override
+      responses:
+        "200": { description: Settings validated, persisted, and activated }
+        "400": { description: Invalid setting value }
+        "403": { description: Tenant settings permission required }
+    delete:
+      summary: Restore environment or built-in deployment defaults
+      responses:
+        "200": { description: Tenant override removed }
+        "403": { description: Tenant settings permission required }
   /alerts:
     get:
       summary: List alerts
@@ -133,6 +149,24 @@ paths:
       responses:
         "200": { description: Audit events }
 components:
+  schemas:
+    PlatformSettings:
+      type: object
+      required:
+        - organization_name
+        - device_offline_minutes
+        - default_telemetry_window
+        - default_ota_pilot_percent
+        - default_enrollment_ttl_hours
+        - default_job_ttl_minutes
+      properties:
+        organization_name: { type: string, minLength: 2, maxLength: 80 }
+        company_domain: { type: string, examples: [devices.example.com] }
+        device_offline_minutes: { type: integer, minimum: 2, maximum: 1440 }
+        default_telemetry_window: { type: string, enum: [15m, 1h, 24h] }
+        default_ota_pilot_percent: { type: integer, minimum: 1, maximum: 100 }
+        default_enrollment_ttl_hours: { type: integer, minimum: 1, maximum: 720 }
+        default_job_ttl_minutes: { type: integer, minimum: 5, maximum: 10080 }
   securitySchemes:
     SessionCookie:
       type: apiKey

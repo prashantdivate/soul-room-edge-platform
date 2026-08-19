@@ -120,7 +120,10 @@ import {
   login,
   logout,
   Membership,
+  PlatformSettings,
   promoteOTACampaign,
+  resetPlatformSettings,
+  updatePlatformSettings,
   updateDevice,
 } from "./api";
 import { FleetMap } from "./FleetMap";
@@ -266,14 +269,14 @@ export default function App() {
 
   const activePage = pageMap[page];
   const signedInUser = data.users.find((user) => user.id === data.membership.user_id);
-  const alerts = deriveAlerts(data.devices);
+  const alerts = deriveAlerts(data.devices, data.settings.device_offline_minutes);
   const exportName = `soul-room-${page}-${new Date().toISOString().slice(0, 10)}`;
   const pageExport = pageExportData(page, data);
   return (
     <div className={sidebarOpen ? "appShell" : "appShell collapsed"}>
       <Sidebar
         active={page}
-        alertCount={deriveAlerts(data.devices).length}
+        alertCount={deriveAlerts(data.devices, data.settings.device_offline_minutes).length}
         open={sidebarOpen}
         onNavigate={(next) => {
           setPage(next);
@@ -286,7 +289,7 @@ export default function App() {
             {sidebarOpen ? <PanelLeftClose size={19} /> : <PanelLeftOpen size={19} />}
           </button>
           <div className="breadcrumb">
-            <span>{data.organization?.name || "Organization"}</span>
+            <span>{data.settings.organization_name || data.organization?.name || "Organization"}</span>
             <ChevronRight size={14} />
             <strong>Production</strong>
           </div>
@@ -453,7 +456,7 @@ function PageContent({ page, data, search, onData, onNavigate, onRefresh }: { pa
     case "audit": return <Audit data={data} search={search} />;
     case "users": return <Users data={data} onData={onData} />;
     case "health": return <Health data={data} />;
-    case "onprem": return <OnPrem data={data} />;
+    case "onprem": return <OnPrem data={data} onData={onData} />;
   }
 }
 
@@ -462,11 +465,11 @@ type ViewProps = { data: FleetData; search: string; onData: (data: FleetData) =>
 function Overview({ data, onNavigate }: ViewProps) {
   if (data.devices.length === 0) return <EmptyFleet onEnroll={() => onNavigate("enrollment")} />;
   const connected = data.devices.filter((device) => device.presence === "connected").length;
-  const alerts = deriveAlerts(data.devices);
+  const alerts = deriveAlerts(data.devices, data.settings.device_offline_minutes);
   const current = data.devices.filter((device) => device.update_state === "current").length;
   return <>
     <section className="metricStrip">
-      <Metric label="Connected now" value={`${connected} / ${data.devices.length}`} note="Last heartbeat within 5 minutes" tone="green" icon={<RadioTower size={18} />} />
+      <Metric label="Connected now" value={`${connected} / ${data.devices.length}`} note={`Last heartbeat within ${data.settings.device_offline_minutes} minutes`} tone="green" icon={<RadioTower size={18} />} />
       <Metric label="Needs attention" value={String(alerts.length)} note={alerts.length ? "Derived from live device state" : "No active device issues"} tone={alerts.length ? "red" : "green"} icon={<AlertTriangle size={18} />} />
       <Metric label="Jobs waiting" value={String(data.jobs.filter((job) => job.state === "queued").length)} note="Will deliver on reconnect" tone="amber" icon={<Clock3 size={18} />} />
       <Metric label="Update coverage" value={`${Math.round(current * 100 / data.devices.length)}%`} note={`${current} of ${data.devices.length} devices current`} tone="blue" icon={<PackageCheck size={18} />} />
@@ -543,7 +546,7 @@ function Gateways({ data }: ViewProps) {
 
 function Telemetry({ data }: ViewProps) {
   const [deviceId, setDeviceId] = React.useState(data.devices[0]?.id || "");
-  const [range, setRange] = React.useState<"15m" | "1h" | "24h">("1h");
+  const [range, setRange] = React.useState<"15m" | "1h" | "24h">(data.settings.default_telemetry_window);
   React.useEffect(() => {
     if (!deviceId && data.devices[0]) setDeviceId(data.devices[0].id);
   }, [data.devices, deviceId]);
@@ -586,7 +589,7 @@ function Jobs({ data, onData }: ViewProps) {
     setSaving(true);
     setJobError("");
     try {
-      const job = await createJob(data.membership, deviceId, type);
+      const job = await createJob(data.membership, deviceId, type, data.settings.default_job_ttl_minutes);
       onData({ ...data, jobs: [job, ...data.jobs.filter((item) => item.id !== job.id)] });
       setShowCreate(false);
       setFilter("queued");
@@ -680,7 +683,7 @@ function OTA({ data, onData }: { data: FleetData; onData: (data: FleetData) => v
   const [artifactSize, setArtifactSize] = React.useState(""); const [compatibleFrom, setCompatibleFrom] = React.useState("");
   const [flatpakRef, setFlatpakRef] = React.useState(""); const [flatpakRemote, setFlatpakRemote] = React.useState("flathub"); const [flatpakCommit, setFlatpakCommit] = React.useState("");
   const [flatpakRepositoryURL, setFlatpakRepositoryURL] = React.useState("");
-  const [canary, setCanary] = React.useState(10); const [targets, setTargets] = React.useState<string[]>([]); const [error, setError] = React.useState(""); const [saving, setSaving] = React.useState(false);
+  const [canary, setCanary] = React.useState(data.settings.default_ota_pilot_percent); const [targets, setTargets] = React.useState<string[]>([]); const [error, setError] = React.useState(""); const [saving, setSaving] = React.useState(false);
   const selectedAdapter = adapter === "custom" ? customAdapter.trim().toLowerCase() : adapter;
   const isFlatpak = selectedAdapter === "flatpak";
   const capable = data.devices.filter((device) => selectedAdapter && device.capabilities?.includes(`ota:${selectedAdapter}`));
@@ -713,7 +716,7 @@ function OTA({ data, onData }: { data: FleetData; onData: (data: FleetData) => v
 }
 
 function Alerts({ data }: { data: FleetData }) {
-  const alerts = deriveAlerts(data.devices);
+  const alerts = deriveAlerts(data.devices, data.settings.device_offline_minutes);
   const critical = alerts.filter((alert) => alert.severity === "critical").length;
   return <><section className="metricStrip"><Metric label="Active" value={String(alerts.length)} note="Derived from live device state" tone={alerts.length ? "red" : "green"} icon={<Bell size={18} />} /><Metric label="Critical" value={String(critical)} note="Offline devices" tone={critical ? "red" : "green"} icon={<AlertTriangle size={18} />} /><Metric label="Warnings" value={String(alerts.length - critical)} note="Health and certificate checks" tone="amber" icon={<ClipboardCheck size={18} />} /><Metric label="Devices checked" value={String(data.devices.length)} note="No synthetic alert records" tone="blue" icon={<Check size={18} />} /></section><Panel title="Active alerts" subtitle="Calculated from the latest accepted device reports"><SimpleTable headers={["Severity", "Issue", "Source", "Detail"]} rows={alerts.map((alert) => [<Badge value={alert.severity} />, alert.title, alert.device, alert.detail])} empty="No device issues are active." /></Panel></>;
 }
@@ -744,7 +747,7 @@ function Applications({ data, onData }: { data: FleetData; onData: (data: FleetD
   async function scan() {
     if (!device) return;
     setScanning(true); setScanError("");
-    try { const job = await createJob(data.membership, device.id, "scan_vulnerabilities"); onData({ ...data, jobs: [job, ...data.jobs] }); }
+    try { const job = await createJob(data.membership, device.id, "scan_vulnerabilities", data.settings.default_job_ttl_minutes); onData({ ...data, jobs: [job, ...data.jobs] }); }
     catch (reason) { setScanError(reason instanceof Error ? reason.message : "The vulnerability scan could not be queued."); }
     finally { setScanning(false); }
   }
@@ -768,11 +771,12 @@ function Artifacts({ data }: { data: FleetData }) {
 
 function Enrollment({ data, onData }: ViewProps) {
   const [profile, setProfile] = React.useState("");
-  const [ttl, setTtl] = React.useState("24h");
+  const defaultTTL = `${data.settings.default_enrollment_ttl_hours}h`;
+  const [ttl, setTtl] = React.useState(defaultTTL);
   const [created, setCreated] = React.useState<EnrollmentToken | null>(null);
   const [saving, setSaving] = React.useState(false);
   async function create() { setSaving(true); try { const token = await createEnrollmentToken(data.membership, profile, ttl); setCreated(token); onData({ ...data, enrollmentTokens: [token, ...data.enrollmentTokens] }); } finally { setSaving(false); } }
-  return <section className="enrollmentLayout"><Panel title="Create enrollment token" subtitle="A token can be used once and expires automatically"><div className="enrollForm"><label>Profile ID (optional)<input value={profile} onChange={(event) => setProfile(event.target.value)} placeholder="embedded-linux-arm64" /></label><label>Valid for<select value={ttl} onChange={(event) => setTtl(event.target.value)}><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="168h">7 days</option></select></label><button className="button successButton" onClick={create} disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <KeyRound size={16} />} Generate token</button>{created?.token && <div className="tokenResult"><span>Copy this token now. It is shown only once.</span><code>{created.token}</code><button className="button infoButton" onClick={() => navigator.clipboard.writeText(created.token || "")}><ClipboardCheck size={16} /> Copy token</button></div>}</div></Panel><Panel title="Connect the device" subtitle="The embedded Linux agent needs two values"><ol className="steps"><li><span>1</span><div><strong>Download the development CA</strong><p>Install it on the device at <code>/etc/edge-agent/ca.pem</code>.</p><a className="button infoButton" href="/api/v1/dev-ca" download><Download size={16} /> Download CA</a></div></li><li><span>2</span><div><strong>Set the gateway endpoint</strong><p>Use <code>{data.platform.device_gateway_endpoint}</code> in the agent configuration.</p></div></li><li><span>3</span><div><strong>Enroll once</strong><p>Start the agent with the token. Its private key never leaves the device.</p></div></li></ol></Panel><Panel title="Recent tokens" subtitle="Token values are not stored after creation"><SimpleTable headers={["ID", "Profile", "Usage", "Expires", "Created"]} rows={data.enrollmentTokens.map((token) => [shortId(token.id), token.profile_id || "Default", `${token.used_count} / ${token.max_devices}`, formatDate(token.expires_at), formatDate(token.created_at)])} empty="No enrollment tokens have been created." /></Panel></section>;
+  return <section className="enrollmentLayout"><Panel title="Create enrollment token" subtitle="A token can be used once and expires automatically"><div className="enrollForm"><label>Profile ID (optional)<input value={profile} onChange={(event) => setProfile(event.target.value)} placeholder="embedded-linux-arm64" /></label><label>Valid for<select value={ttl} onChange={(event) => setTtl(event.target.value)}>{!["1h", "24h", "168h"].includes(defaultTTL) && <option value={defaultTTL}>{data.settings.default_enrollment_ttl_hours} hours (organization default)</option>}<option value="1h">1 hour</option><option value="24h">24 hours</option><option value="168h">7 days</option></select></label><button className="button successButton" onClick={create} disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <KeyRound size={16} />} Generate token</button>{created?.token && <div className="tokenResult"><span>Copy this token now. It is shown only once.</span><code>{created.token}</code><button className="button infoButton" onClick={() => navigator.clipboard.writeText(created.token || "")}><ClipboardCheck size={16} /> Copy token</button></div>}</div></Panel><Panel title="Connect the device" subtitle="The embedded Linux agent needs two values"><ol className="steps"><li><span>1</span><div><strong>Download the development CA</strong><p>Install it on the device at <code>/etc/edge-agent/ca.pem</code>.</p><a className="button infoButton" href="/api/v1/dev-ca" download><Download size={16} /> Download CA</a></div></li><li><span>2</span><div><strong>Set the gateway endpoint</strong><p>Use <code>{data.platform.device_gateway_endpoint}</code> in the agent configuration.</p></div></li><li><span>3</span><div><strong>Enroll once</strong><p>Start the agent with the token. Its private key never leaves the device.</p></div></li></ol></Panel><Panel title="Recent tokens" subtitle="Token values are not stored after creation"><SimpleTable headers={["ID", "Profile", "Usage", "Expires", "Created"]} rows={data.enrollmentTokens.map((token) => [shortId(token.id), token.profile_id || "Default", `${token.used_count} / ${token.max_devices}`, formatDate(token.expires_at), formatDate(token.created_at)])} empty="No enrollment tokens have been created." /></Panel></section>;
 }
 
 function Audit({ data, search }: { data: FleetData; search: string }) {
@@ -832,8 +836,51 @@ function Health({ data }: { data: FleetData }) {
   </>;
 }
 
-function OnPrem({ data }: { data: FleetData }) {
-  return <><div className="adminSummary"><div><span className="overline">Installation</span><strong>Soul Room Local</strong><p>Single-node Docker Compose - Version 0.1.0</p></div><Badge value="running" /></div><section className="adminGrid"><AdminAction icon={<Archive size={20} />} title="Backup & restore" detail="Use the Compose maintenance profile for portable backups." primary="Backup" meta="No synthetic backup history" /><AdminAction icon={<ShieldCheck size={20} />} title="Certificates" detail="Download the CA trusted by enrolled devices." primary="Download CA" href="/api/v1/dev-ca" meta={`${data.devices.length} issued device identities`} /><AdminAction icon={<HardDrive size={20} />} title="Fleet records" detail="Live records currently loaded from the platform store." primary="Review" meta={`${data.devices.length} devices - ${data.metrics.length} samples`} /><AdminAction icon={<PackageCheck size={20} />} title="Platform version" detail="Current local control-plane release." primary="Version" meta="0.1.0" /></section><Panel title="Environment endpoints" subtitle="Addresses exposed by the local Compose stack"><DetailList items={[["Web console", window.location.origin], ["Control API", `${window.location.protocol}//${window.location.hostname}:8080`], ["Device gateway", data.platform.device_gateway_endpoint], ["MinIO console", `http://${window.location.hostname}:9001`], ["Mailpit", `http://${window.location.hostname}:8025`]]} /></Panel></>;
+function OnPrem({ data, onData }: { data: FleetData; onData: (data: FleetData) => void }) {
+  const [tab, setTab] = React.useState<"settings" | "infrastructure">("settings");
+  const [draft, setDraft] = React.useState<PlatformSettings>(data.settings);
+  const [dirty, setDirty] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [message, setMessage] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [showReset, setShowReset] = React.useState(false);
+  React.useEffect(() => { if (!dirty) setDraft(data.settings); }, [data.settings, dirty]);
+  const update = (patch: Partial<PlatformSettings>) => { setDraft({ ...draft, ...patch }); setDirty(true); setMessage(""); setError(""); };
+  async function save() {
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const response = await updatePlatformSettings(data.membership, draft);
+      onData({ ...data, settings: response.settings, settingsSource: response.source, canManageSettings: response.can_manage, organization: { ...data.organization, name: response.settings.organization_name } });
+      setDraft(response.settings); setDirty(false); setMessage("Platform settings saved and active.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Platform settings could not be saved."); }
+    finally { setSaving(false); }
+  }
+  async function reset() {
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const response = await resetPlatformSettings(data.membership);
+      onData({ ...data, settings: response.settings, settingsSource: response.source, canManageSettings: response.can_manage, organization: { ...data.organization, name: response.settings.organization_name } });
+      setDraft(response.settings); setDirty(false); setShowReset(false); setMessage("Operational defaults restored from the deployment configuration.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Platform settings could not be reset."); }
+    finally { setSaving(false); }
+  }
+  return <>
+    <Toolbar><div className="segmented" aria-label="Platform administration view"><button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}><Settings2 size={15} /> Platform settings</button><button className={tab === "infrastructure" ? "active" : ""} onClick={() => setTab("infrastructure")}><ServerCog size={15} /> Infrastructure</button></div><Badge value={data.settingsSource === "platform" ? "UI managed" : "deployment defaults"} /></Toolbar>
+    {tab === "settings" ? <>
+      <div className="settingsSummary"><div className="settingsSummaryIcon"><SlidersHorizontal size={22} /></div><div><strong>Organization-level configuration</strong><p>These values take effect without rebuilding containers. Deployment credentials, keys, storage, and network listeners remain protected outside the browser.</p></div><span>{data.settingsSource === "platform" && data.settings.updated_at ? `Updated ${relativeTime(data.settings.updated_at)}` : "Using deployment defaults"}</span></div>
+      {message && <div className="inlineNotice successNotice"><Check size={17} />{message}</div>}
+      {error && <div className="inlineError"><AlertTriangle size={17} />{error}<button onClick={() => setError("")}><X size={15} /></button></div>}
+      <Panel title="Organization identity" subtitle="Shown throughout this organization workspace"><div className="settingsGrid identitySettings"><label>Display name<input value={draft.organization_name} disabled={!data.canManageSettings} onChange={(event) => update({ organization_name: event.target.value })} maxLength={80} /></label><label>Company domain <span className="optionalLabel">Optional</span><div className="domainInput"><span>https://</span><input value={draft.company_domain || ""} disabled={!data.canManageSettings} onChange={(event) => update({ company_domain: event.target.value.replace(/^https?:\/\//i, "") })} placeholder="devices.example.com" /></div><small>Used as organization identity; it does not change DNS or TLS automatically.</small></label></div></Panel>
+      <Panel title="Fleet behavior" subtitle="Defaults used by monitoring and operator workflows"><div className="settingsGrid"><label>Mark device offline after<div className="numberInput"><input type="number" min="2" max="1440" value={draft.device_offline_minutes} disabled={!data.canManageSettings} onChange={(event) => update({ device_offline_minutes: Number(event.target.value) })} /><span>minutes</span></div><small>Heartbeat age used by device state, alerts, and fleet availability.</small></label><label>Default telemetry view<select value={draft.default_telemetry_window} disabled={!data.canManageSettings} onChange={(event) => update({ default_telemetry_window: event.target.value as PlatformSettings["default_telemetry_window"] })}><option value="15m">Last 15 minutes</option><option value="1h">Last hour</option><option value="24h">Last 24 hours</option></select><small>The initial window when an operator opens Telemetry.</small></label></div></Panel>
+      <Panel title="Operational defaults" subtitle="Applied when operators create a rollout, token, or job"><div className="settingsGrid threeColumns"><label>Pilot rollout group<div className="rangeField settingsRange"><input type="range" min="1" max="100" value={draft.default_ota_pilot_percent} disabled={!data.canManageSettings} onChange={(event) => update({ default_ota_pilot_percent: Number(event.target.value) })} /><output>{draft.default_ota_pilot_percent}%</output></div><small>The first portion of compatible targets updated before approval.</small></label><label>Enrollment token lifetime<div className="numberInput"><input type="number" min="1" max="720" value={draft.default_enrollment_ttl_hours} disabled={!data.canManageSettings} onChange={(event) => update({ default_enrollment_ttl_hours: Number(event.target.value) })} /><span>hours</span></div><small>New one-time enrollment tokens use this lifetime.</small></label><label>Job expiry<div className="numberInput"><input type="number" min="5" max="10080" value={draft.default_job_ttl_minutes} disabled={!data.canManageSettings} onChange={(event) => update({ default_job_ttl_minutes: Number(event.target.value) })} /><span>minutes</span></div><small>Queued jobs expire if a device does not collect them in time.</small></label></div></Panel>
+      <div className="settingsActions"><div><strong>{dirty ? "Unsaved changes" : "Configuration is up to date"}</strong><span>{data.canManageSettings ? "Changes are scoped to this organization and recorded in the audit log." : "Only an organization owner can change these settings."}</span></div>{data.canManageSettings && <div><button className="button secondary" disabled={saving || data.settingsSource !== "platform"} onClick={() => setShowReset(true)}><RefreshCw size={16} /> Restore defaults</button><button className="button primary" disabled={saving || !dirty} onClick={save}>{saving ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />} Save changes</button></div>}</div>
+    </> : <>
+      <div className="adminSummary"><div><span className="overline">Installation</span><strong>Soul Room Local</strong><p>Single-node Docker Compose - Version 0.1.0</p></div><Badge value="running" /></div>
+      <Panel title="Environment-managed configuration" subtitle="Infrastructure values are read-only here because changing them may require DNS, certificates, secrets, or a service restart"><div className="environmentSettings">{data.infrastructureSettings.map((setting) => <div key={setting.key}><span className="environmentIcon"><LockKeyhole size={16} /></span><span><strong>{setting.label}</strong><code>{setting.value}</code></span><Badge value={setting.restart_required ? "restart required" : "environment"} /></div>)}</div></Panel>
+      <section className="adminGrid"><AdminAction icon={<Archive size={20} />} title="Backup & restore" detail="Use the Compose maintenance profile for portable backups." primary="Backup" meta="No synthetic backup history" /><AdminAction icon={<ShieldCheck size={20} />} title="Certificates" detail="Download the CA trusted by enrolled devices." primary="Download CA" href="/api/v1/dev-ca" meta={`${data.devices.length} issued device identities`} /><AdminAction icon={<HardDrive size={20} />} title="Fleet records" detail="Live records currently loaded from the platform store." primary="Review" meta={`${data.devices.length} devices - ${data.metrics.length} samples`} /><AdminAction icon={<PackageCheck size={20} />} title="Platform version" detail="Current local control-plane release." primary="Version" meta="0.1.0" /></section>
+    </>}
+    {showReset && <Modal title="Restore deployment defaults" onClose={() => !saving && setShowReset(false)}><div className="modalForm"><div className="notice warningNotice"><AlertTriangle size={18} /><div><strong>Remove the UI override?</strong><span>Operational values will return to the optional environment configuration, or to Soul Room defaults when no environment value is set.</span></div></div><div className="modalActions"><button className="button secondary" disabled={saving} onClick={() => setShowReset(false)}>Cancel</button><button className="button dangerButton" disabled={saving} onClick={reset}>{saving ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} Restore defaults</button></div></div></Modal>}
+  </>;
 }
 
 function DeviceTable({ devices, compact = false, onSelect }: { devices: Device[]; compact?: boolean; onSelect?: (device: Device) => void }) {
@@ -961,7 +1008,7 @@ function pageExportData(page: PageId, data: FleetData) {
     case "audit": return { ...shared, audit_events: data.audit };
     case "users": return { ...shared, users: data.users, roles: data.roles };
     case "enrollment": return { ...shared, enrollment_tokens: data.enrollmentTokens.map(({ token: _token, ...record }) => record) };
-    default: return { ...shared, devices: data.devices, jobs: data.jobs, alerts: deriveAlerts(data.devices) };
+    default: return { ...shared, devices: data.devices, jobs: data.jobs, alerts: deriveAlerts(data.devices, data.settings.device_offline_minutes) };
   }
 }
 
@@ -982,12 +1029,12 @@ function formatBytes(bytes: number) { if (!bytes) return "0 B"; const units = ["
 function formatDate(value?: string) { return value ? new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—"; }
 function relativeTime(value?: string) { if (!value) return "Never"; const seconds = Math.floor((Date.now() - new Date(value).getTime()) / 1000); if (seconds < 60) return `${seconds}s ago`; if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`; return `${Math.floor(seconds / 86400)}d ago`; }
 function recordText(record: Record<string, unknown>, key: string) { const value = record[key]; return value === undefined || value === null || value === "" ? "—" : String(value); }
-function deriveAlerts(devices: Device[]) {
+function deriveAlerts(devices: Device[], offlineMinutes = 5) {
   const alerts: { id: string; severity: "critical" | "warning"; title: string; detail: string; device: string; page: PageId }[] = [];
   const now = Date.now();
   devices.forEach((device) => {
     const lastSeen = device.last_seen_at ? new Date(device.last_seen_at).getTime() : 0;
-    if (device.presence === "offline" || (lastSeen > 0 && now - lastSeen > 5 * 60 * 1000)) alerts.push({ id: `${device.id}-offline`, severity: "critical", title: "Device is not reporting", detail: `Last seen ${relativeTime(device.last_seen_at)}`, device: device.display_name, page: "devices" });
+    if (device.presence === "offline" || (lastSeen > 0 && now - lastSeen > offlineMinutes * 60 * 1000)) alerts.push({ id: `${device.id}-offline`, severity: "critical", title: "Device is not reporting", detail: `Last seen ${relativeTime(device.last_seen_at)}`, device: device.display_name, page: "devices" });
     if (device.health_state && !["healthy", "unknown"].includes(device.health_state)) alerts.push({ id: `${device.id}-health`, severity: "warning", title: `Health state: ${device.health_state}`, detail: "Reported by the latest heartbeat", device: device.display_name, page: "telemetry" });
     if (device.certificate_expires_at) { const days = Math.ceil((new Date(device.certificate_expires_at).getTime() - now) / 86400000); if (days <= 30) alerts.push({ id: `${device.id}-certificate`, severity: days <= 7 ? "critical" : "warning", title: "Certificate renewal required", detail: `${Math.max(days, 0)} days remaining`, device: device.display_name, page: "enrollment" }); }
   });

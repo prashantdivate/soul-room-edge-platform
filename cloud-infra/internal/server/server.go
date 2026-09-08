@@ -47,6 +47,7 @@ func (s *Server) ControlHandler() http.Handler {
 	mux.HandleFunc("/metrics", observability.Metrics)
 	mux.HandleFunc("/api/v1/auth/login", s.login)
 	mux.HandleFunc("/api/v1/auth/logout", s.logout)
+	mux.Handle("/api/v1/auth/session", s.withAuth(http.HandlerFunc(s.currentSession)))
 	mux.Handle("/api/v1/organizations", s.withAuth(http.HandlerFunc(s.organizations)))
 	mux.Handle("/api/v1/enrollment-tokens", s.withAuth(http.HandlerFunc(s.enrollmentTokens)))
 	mux.Handle("/api/v1/devices", s.withAuth(http.HandlerFunc(s.devices)))
@@ -78,18 +79,29 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "signed_out"})
 }
 
+func (s *Server) currentSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	tc, _ := tenancy.Require(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{"membership": model.Membership{TenantID: tc.TenantID, UserID: tc.ActorID, Role: tc.Roles[0]}})
+}
+
 func (s *Server) platformInfo(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+	tc, _ := tenancy.Require(r.Context())
+	settings, _ := s.effectivePlatformSettings(tc)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"device_gateway_endpoint":  "https://" + s.Config.DevicePublicHost + ":8443",
 		"remote_access_provider":   "shellhub",
-		"remote_access_url":        s.Config.ShellHubURL,
-		"remote_access_configured": s.Config.ShellHubURL != "",
+		"remote_access_url":        settings.ShellHubURL,
+		"remote_access_configured": settings.ShellHubURL != "",
 		"remote_access_managed":    s.Config.ShellHubManaged,
-		"remote_access_ssh_port":   s.Config.ShellHubSSHPort,
+		"remote_access_ssh_port":   settings.ShellHubSSHPort,
 	})
 }
 
@@ -103,7 +115,7 @@ func (s *Server) platformSettings(w http.ResponseWriter, r *http.Request) {
 			"can_manage": rbac.Authorize(r.Context(), rbac.TenantSettings) == nil,
 			"infrastructure": []map[string]any{
 				{"key": "device_gateway", "label": "Device gateway", "value": "https://" + s.Config.DevicePublicHost + ":8443", "restart_required": true},
-				{"key": "remote_access", "label": "Remote access", "value": firstNonEmpty(s.Config.ShellHubURL, "Not configured"), "restart_required": true},
+				{"key": "remote_access_mode", "label": "ShellHub service", "value": map[bool]string{true: "Bundled", false: "External"}[s.Config.ShellHubManaged], "restart_required": true},
 				{"key": "session_lifetime", "label": "Session lifetime", "value": s.Config.SessionTTL.String(), "restart_required": true},
 				{"key": "request_limit", "label": "Request size limit", "value": strconv.FormatInt(s.Config.MaxPayloadBytes, 10) + " bytes", "restart_required": true},
 			},
@@ -135,6 +147,7 @@ func (s *Server) platformSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	value.OrganizationName = strings.TrimSpace(value.OrganizationName)
 	value.CompanyDomain = strings.ToLower(strings.TrimSpace(value.CompanyDomain))
+	value.ShellHubURL = strings.TrimRight(strings.TrimSpace(value.ShellHubURL), "/")
 	if err := platformsettings.Validate(value); err != nil {
 		errorJSON(w, http.StatusBadRequest, "invalid_settings", err.Error())
 		return
@@ -150,6 +163,12 @@ func (s *Server) platformSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) effectivePlatformSettings(tc tenancy.Context) (model.PlatformSettings, string) {
 	if value, ok := s.Store.PlatformSettings(tc); ok {
+		if value.ShellHubURL == "" {
+			value.ShellHubURL = s.Config.ShellHubURL
+		}
+		if value.ShellHubSSHPort == 0 {
+			value.ShellHubSSHPort = s.Config.ShellHubSSHPort
+		}
 		return value, "platform"
 	}
 	organizationName := s.Config.OrganizationName
@@ -159,6 +178,8 @@ func (s *Server) effectivePlatformSettings(tc tenancy.Context) (model.PlatformSe
 	return model.PlatformSettings{
 		OrganizationName:          organizationName,
 		CompanyDomain:             s.Config.CompanyDomain,
+		ShellHubURL:               s.Config.ShellHubURL,
+		ShellHubSSHPort:           s.Config.ShellHubSSHPort,
 		DeviceOfflineMinutes:      s.Config.DeviceOfflineMinutes,
 		DefaultTelemetryWindow:    s.Config.DefaultTelemetryWindow,
 		DefaultOTAPilotPercent:    s.Config.DefaultOTAPilotPercent,
@@ -542,6 +563,8 @@ func (s *Server) queueOTAJobs(tc tenancy.Context, campaign ota.Campaign, deviceI
 		"compatible_from": campaign.CompatibleFrom, "flatpak_ref": campaign.FlatpakRef,
 		"flatpak_remote": campaign.FlatpakRemote, "flatpak_commit": campaign.FlatpakCommit,
 		"repository_url": campaign.FlatpakRepositoryURL,
+		"ostree_remote":  campaign.OSTreeRemote, "ostree_ref": campaign.OSTreeRef,
+		"ostree_commit": campaign.OSTreeCommit, "ostree_os": campaign.OSTreeOS,
 	})
 	if err != nil {
 		return 0, err
@@ -572,11 +595,12 @@ func (s *Server) remoteAccess(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "forbidden", "permission denied")
 		return
 	}
-	if s.Config.ShellHubURL == "" {
+	tc, _ := tenancy.Require(r.Context())
+	settings, _ := s.effectivePlatformSettings(tc)
+	if settings.ShellHubURL == "" {
 		errorJSON(w, http.StatusServiceUnavailable, "remote_access_unconfigured", "ShellHub URL is not configured")
 		return
 	}
-	tc, _ := tenancy.Require(r.Context())
 	var req struct {
 		DeviceID string `json:"device_id"`
 		User     string `json:"user"`
@@ -595,12 +619,12 @@ func (s *Server) remoteAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sshCommand := "ssh "
-	if s.Config.ShellHubSSHPort != 22 {
-		sshCommand += "-p " + strconv.Itoa(s.Config.ShellHubSSHPort) + " "
+	if settings.ShellHubSSHPort != 22 {
+		sshCommand += "-p " + strconv.Itoa(settings.ShellHubSSHPort) + " "
 	}
 	sshCommand += req.User + "@" + device.RemoteAccessID
 	audit.Record(s.Store, tc, "remote_access.requested", "device", device.ID, "success", map[string]string{"provider": "shellhub", "user": req.User})
-	writeJSON(w, http.StatusCreated, map[string]string{"provider": "shellhub", "launch_url": s.Config.ShellHubURL, "ssh_command": sshCommand})
+	writeJSON(w, http.StatusCreated, map[string]string{"provider": "shellhub", "launch_url": settings.ShellHubURL, "ssh_command": sshCommand})
 }
 
 func (s *Server) telemetryQuery(w http.ResponseWriter, r *http.Request) {

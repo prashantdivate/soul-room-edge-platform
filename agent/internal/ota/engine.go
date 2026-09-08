@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -70,7 +71,7 @@ func (e *Engine) Execute(ctx context.Context, request Request, progress Progress
 	if err != nil {
 		return e.failed(request, "state", err)
 	}
-	if tx.Request.UpdateID != request.UpdateID || tx.Request.Adapter != request.Adapter || tx.Request.Digest != request.Digest {
+	if !reflect.DeepEqual(tx.Request, request) {
 		return e.failed(request, "state", errors.New("persisted OTA transaction does not match the delivered request"))
 	}
 	if !validPhase(tx.Phase) {
@@ -100,7 +101,7 @@ func (e *Engine) Execute(ctx context.Context, request Request, progress Progress
 		if err := compatibleFrom(request.CompatibleFrom, tx.PreviousVersion); err != nil {
 			return e.failAndRollback(ctx, adapter, &tx, "compatibility", err)
 		}
-		if adapter.ArtifactRequired() {
+		if adapter.ArtifactRequired() && !usesOSTreeRepository(request) {
 			if err := ensureFreeSpace(e.cfg.StagingDir, e.cfg.MinFreeBytes, uint64(request.ArtifactSize)); err != nil {
 				return e.failAndRollback(ctx, adapter, &tx, "preflight", err)
 			}
@@ -111,7 +112,7 @@ func (e *Engine) Execute(ctx context.Context, request Request, progress Progress
 		}
 	}
 
-	if tx.Phase == "prepared" && adapter.ArtifactRequired() {
+	if tx.Phase == "prepared" && adapter.ArtifactRequired() && !usesOSTreeRepository(request) {
 		progress("Downloading the signed update artifact")
 		artifact, err := e.download.fetch(ctx, request)
 		if err != nil {
@@ -131,8 +132,12 @@ func (e *Engine) Execute(ctx context.Context, request Request, progress Progress
 
 	if tx.Phase == "downloaded" {
 		progress("Verifying digest, release signature, and native artifact metadata")
-		if adapter.ArtifactRequired() {
+		if adapter.ArtifactRequired() && !usesOSTreeRepository(request) {
 			if err := verifyArtifact(tx.ArtifactPath, request, e.cfg.TrustedKeysDir); err != nil {
+				return e.failAndRollback(ctx, adapter, &tx, "verification", err)
+			}
+		} else if usesOSTreeRepository(request) {
+			if err := verifyReleaseSignature(request, e.cfg.TrustedKeysDir); err != nil {
 				return e.failAndRollback(ctx, adapter, &tx, "verification", err)
 			}
 		}
@@ -227,10 +232,16 @@ func (e *Engine) confirmAndCommit(ctx context.Context, adapter Adapter, tx *tran
 		return e.failAndRollback(ctx, adapter, tx, "version_confirmation", err)
 	}
 	expected := tx.Request.Version
-	if tx.Request.Adapter == "flatpak" {
+	if tx.Request.Adapter == "ostree" {
+		expected = tx.Request.OSTreeCommit
+	} else if tx.Request.Adapter == "flatpak" {
 		expected = tx.Request.FlatpakCommit
 	}
-	if expected != "" && strings.TrimSpace(current) != "" && !strings.Contains(current, expected) {
+	current = strings.TrimSpace(current)
+	if (tx.Request.Adapter == "ostree" || tx.Request.Adapter == "flatpak") && expected != "" && !strings.EqualFold(current, expected) {
+		return e.failAndRollback(ctx, adapter, tx, "version_confirmation", fmt.Errorf("reported immutable revision %q does not equal expected revision %q", current, expected))
+	}
+	if tx.Request.Adapter != "ostree" && tx.Request.Adapter != "flatpak" && expected != "" && current != "" && !strings.Contains(current, expected) {
 		return e.failAndRollback(ctx, adapter, tx, "version_confirmation", fmt.Errorf("reported version does not contain expected release %q", expected))
 	}
 	progress("Committing the healthy update")

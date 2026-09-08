@@ -19,6 +19,10 @@ func verifyArtifact(path string, request Request, trustedKeysDir string) error {
 	if !digestMatches(path, request.Digest) {
 		return errors.New("artifact SHA-256 digest mismatch")
 	}
+	return verifyReleaseSignature(request, trustedKeysDir)
+}
+
+func verifyReleaseSignature(request Request, trustedKeysDir string) error {
 	if !signingKeyIDPattern.MatchString(request.SigningKeyID) {
 		return errors.New("invalid signing key ID")
 	}
@@ -46,7 +50,7 @@ func verifyArtifact(path string, request Request, trustedKeysDir string) error {
 		return errors.New("detached signature must be a base64 Ed25519 signature")
 	}
 	if !ed25519.Verify(publicKey, []byte(strings.ToLower(request.Digest)), signature) {
-		return errors.New("artifact release signature is invalid")
+		return errors.New("release signature is invalid")
 	}
 	return nil
 }

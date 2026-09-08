@@ -34,20 +34,27 @@ S3-compatible object storage.
 ## Local Workflow
 
 ```text
-docker compose up --build -d
+../platform.sh build
+# or on Windows: ..\platform.cmd build
 ```
 
-Then open `http://localhost:3080`. ShellHub administration is available at
-`http://localhost:8088`, and its SSH gateway uses port `22222`. The local Compose
+Then open `http://localhost:3080`. ShellHub is embedded directly in **Operations
+> Remote access**, and its SSH gateway uses port `22222`. The local Compose
 stack starts every required service automatically; no operating-system-specific
 scripts are required. ShellHub still requires its secure one-time web setup to
 create its first administrator and namespace.
 
+The default local stack omits unused Soul Room PostgreSQL, MinIO, and Mailpit
+services. Current platform state is stored in the `app-data` volume; ShellHub
+retains its own PostgreSQL and Valkey services for remote-access identity and
+session coordination.
+
 ### Platform settings
 
-After signing in as the organization owner, open **Platform > On-prem admin >
-Platform settings** to configure organization identity, heartbeat presence,
-telemetry, rollout, enrollment, and job defaults. These settings are stored per
+After signing in as the organization owner, open **Settings > Platform
+settings** to configure organization identity, heartbeat presence,
+telemetry, rollout, enrollment, job defaults, and the ShellHub portal and SSH
+port. These settings are stored per
 organization and take effect without a container restart. `.env` remains
 optional for deployment defaults and required only for infrastructure values or
 secrets. See [On-premises administration](docs/ONPREM_ADMIN.md).

@@ -15,6 +15,8 @@ type Organization struct {
 type PlatformSettings struct {
 	OrganizationName          string    `json:"organization_name"`
 	CompanyDomain             string    `json:"company_domain,omitempty"`
+	ShellHubURL               string    `json:"shellhub_url,omitempty"`
+	ShellHubSSHPort           int       `json:"shellhub_ssh_port"`
 	DeviceOfflineMinutes      int       `json:"device_offline_minutes"`
 	DefaultTelemetryWindow    string    `json:"default_telemetry_window"`
 	DefaultOTAPilotPercent    int       `json:"default_ota_pilot_percent"`

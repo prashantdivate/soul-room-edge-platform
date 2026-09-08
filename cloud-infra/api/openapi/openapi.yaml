@@ -11,6 +11,17 @@ paths:
       responses:
         "200": { description: Login accepted }
         "401": { description: Invalid credentials }
+  /auth/session:
+    get:
+      summary: Restore the membership for an existing session cookie
+      responses:
+        "200": { description: Active membership }
+        "401": { description: Session missing or expired }
+  /auth/logout:
+    post:
+      summary: Clear the current session cookie
+      responses:
+        "200": { description: Signed out }
   /organizations:
     get:
       summary: List organizations visible to the caller
@@ -154,6 +165,7 @@ components:
       type: object
       required:
         - organization_name
+        - shellhub_ssh_port
         - device_offline_minutes
         - default_telemetry_window
         - default_ota_pilot_percent
@@ -162,6 +174,8 @@ components:
       properties:
         organization_name: { type: string, minLength: 2, maxLength: 80 }
         company_domain: { type: string, examples: [devices.example.com] }
+        shellhub_url: { type: string, format: uri, examples: [http://localhost:8088] }
+        shellhub_ssh_port: { type: integer, minimum: 1, maximum: 65535, examples: [22222] }
         device_offline_minutes: { type: integer, minimum: 2, maximum: 1440 }
         default_telemetry_window: { type: string, enum: [15m, 1h, 24h] }
         default_ota_pilot_percent: { type: integer, minimum: 1, maximum: 100 }

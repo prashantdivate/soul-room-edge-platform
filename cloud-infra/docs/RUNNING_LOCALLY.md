@@ -5,11 +5,15 @@ Docker Desktop or Docker Engine with the Compose plugin.
 
 ## Start
 
-Open the VS Code terminal in `cloud-infra`, then run:
+Open the VS Code terminal at the repository root, then run:
 
 ```text
-docker compose up --build -d
+./platform.sh build
+# Windows Command Prompt or PowerShell: platform.cmd build
 ```
+
+After the images exist, use `./platform.sh up` or `platform.cmd up` for a fast
+start without rebuilding.
 
 Copy `.env.example` to `.env` and set the company and initial owner values:
 
@@ -27,9 +31,11 @@ Open `http://localhost:3080` and sign in with that owner account. These values
 are used only when the data volume is empty; normal restarts never reset the
 owner password.
 
-Compose starts the web console, control API, device gateway, worker, PostgreSQL,
-MinIO, Mailpit, and the pinned ShellHub Community Edition stack. On the first
-run it creates only the Soul Room administrator and organization. ShellHub uses
+Compose starts the web console, combined control-plane service, and the pinned
+ShellHub Community Edition stack. Soul Room's current durable store lives in
+the `app-data` volume, so unused PostgreSQL, MinIO, and Mailpit containers are
+not part of the default local stack. On the first run it creates only the Soul
+Room administrator and organization. ShellHub uses
 its own security boundary and asks you to create its administrator and namespace
 at `http://localhost:8088/setup`. Devices and fleet activity appear only after
 a real agent enrolls.
@@ -54,8 +60,8 @@ Create a timestamped local backup set in `cloud-infra/backups`:
 docker compose --profile maintenance run --rm backup
 ```
 
-The backup includes Soul Room state, MinIO data, ShellHub PostgreSQL records,
-and ShellHub signing keys. The command prints the backup-set timestamp. Restore
+The backup includes Soul Room state, ShellHub PostgreSQL records, and ShellHub
+signing keys. The command prints the backup-set timestamp. Restore
 that set with the same command on Windows, Linux, or macOS:
 
 ```text
@@ -72,8 +78,6 @@ and audit history afterward.
 | Web console | `http://localhost:3080` |
 | Control API | `http://localhost:8080` |
 | Device gateway | `https://localhost:8443` |
-| MinIO console | `http://localhost:9001` |
-| Mailpit | `http://localhost:8025` |
 | ShellHub portal | `http://localhost:8088` |
 | ShellHub SSH gateway | `localhost:22222` |
 
@@ -100,7 +104,7 @@ gateway certificate matches the address used by the device.
 
 ## Initialize Remote Access
 
-1. Open `http://localhost:8088/setup` and create the ShellHub administrator.
+1. Open **Remote access** and use the embedded portal, or open `http://localhost:8088/setup` directly, then create the ShellHub administrator.
 2. Create a ShellHub namespace and copy its tenant ID.
 3. Follow `SHELLHUB_INTEGRATION.md` to install the ShellHub agent on the device.
 4. Accept the pending device in ShellHub and copy its SSHID.

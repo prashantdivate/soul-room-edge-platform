@@ -23,7 +23,7 @@ operator workflow to Windows, Linux, or macOS.
 | Updates | Capability-gated Mender, RAUC, OSTree, SWUpdate, Flatpak, and custom-plugin campaigns with signed artifacts, durable reboot recovery, health confirmation, rollback, and pilot-first delivery |
 | Software posture | Installed Debian/RPM package inventory and optional Trivy-backed OS vulnerability advisory scans |
 | Governance | Tenant isolation, built-in RBAC, team-user creation, server-side sessions, and append-oriented audit activity |
-| Platform | One Docker Compose command, PostgreSQL, MinIO, Mailpit, local durable state, backup/restore profiles, Helm and Terraform foundations |
+| Platform | One launcher command, lightweight local durable state, backup/restore profiles, Helm and Terraform foundations |
 
 Soul Room does not generate demo fleet data. Empty screens remain empty until a real
 agent reports data.
@@ -76,22 +76,25 @@ From the repository root, use the launcher so you do not need to remember
 Compose arguments:
 
 ```bash
-# Linux or macOS
-sh platform.sh up
+# Linux or macOS: first run or after source changes
+sh platform.sh build
 
-# Windows Command Prompt or PowerShell
-platform.cmd up
+# Windows Command Prompt or PowerShell: first run or after source changes
+platform.cmd build
 ```
 
-The same launcher supports `down`, `refresh`, `restart`, `status`, `logs`, and
+Use `platform.sh up` or `platform.cmd up` for later starts without rebuilding.
+The launcher also supports `down`, `refresh`, `restart`, `status`, `logs`, and
 `doctor`. Run `sh platform.sh help` or `platform.cmd help` for examples.
 
 Open [http://localhost:3080](http://localhost:3080) and sign in with the owner
 account configured in `cloud-infra/.env`.
 
-Compose starts the console, API/device gateway, PostgreSQL, MinIO, Mailpit, and
-the pinned ShellHub Community Edition services. ShellHub is available at
-[http://localhost:8088](http://localhost:8088); complete its setup wizard once
+Compose starts the console, combined API/device gateway, and the pinned
+ShellHub Community Edition services. The local control plane uses its durable
+`app-data` volume; unused PostgreSQL, MinIO, and Mailpit containers are not
+started. ShellHub is embedded in **Remote access** and is also available at
+[http://localhost:8088](http://localhost:8088). Complete its setup wizard once
 before adding remote-access devices. Its SSH gateway listens on port `22222`.
 It creates only the configured administrator and organization. Bootstrap
 credentials are applied only to a clean installation and are not reapplied on
@@ -147,7 +150,7 @@ dedicated Linux account. Follow the complete
 Soul Room includes a self-hosted ShellHub Community Edition deployment. No
 external ShellHub URL is required. On first startup:
 
-1. Open [http://localhost:8088/setup](http://localhost:8088/setup).
+1. Open **Remote access** and launch the embedded ShellHub portal, or use [http://localhost:8088/setup](http://localhost:8088/setup).
 2. Create the ShellHub administrator and first namespace.
 3. Install the ShellHub agent on the device using the tenant ID shown by that namespace.
 4. Accept the pending device in ShellHub and copy its SSHID.
@@ -155,8 +158,8 @@ external ShellHub URL is required. On first startup:
 
 The Soul Room agent and ShellHub agent are separate services: the former owns
 fleet telemetry, jobs, and OTA; the latter owns the outbound remote-shell
-tunnel. Soul Room checks RBAC and writes an audit event before handing the
-operator to ShellHub. See the [complete ShellHub guide](./cloud-infra/docs/SHELLHUB_INTEGRATION.md)
+tunnel. Soul Room checks RBAC and writes an audit event before showing the
+sandboxed ShellHub console inside the platform. See the [complete ShellHub guide](./cloud-infra/docs/SHELLHUB_INTEGRATION.md)
 for Ubuntu, Yocto, networking, persistence, and production TLS requirements.
 
 ## Self-Hosted Flatpak Updates
@@ -180,6 +183,20 @@ Rollouts begin with the configured pilot group and require promotion before the
 remaining devices are queued. The API field remains `canary_percent` for
 protocol compatibility; the console uses the clearer operator term "pilot
 group."
+
+## OSTree Repository Updates
+
+OSTree OS campaigns can use either a signed static-delta artifact or an online
+repository. Online campaigns pull a pinned `REF@COMMIT` from a remote provisioned
+on the device with HTTPS and native GPG trust. Soul Room will not accept a remote
+with GPG verification disabled or permissive TLS, and it deploys and confirms
+the exact commit rather than the human release version.
+
+Device-side remote provisioning, release signing, bootloader integration, and
+the complete campaign fields are documented in
+[OTA adapters](./agent/docs/OTA_ADAPTERS.md). A successful software test does not
+replace power-loss, rollback, and bootloader qualification on each production
+hardware/image combination.
 
 ## Package And CVE Posture
 

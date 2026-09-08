@@ -20,6 +20,15 @@ func Validate(value model.PlatformSettings) error {
 			return errors.New("company domain must be a hostname such as example.com")
 		}
 	}
+	if value.ShellHubURL != "" {
+		portal, err := url.Parse(strings.TrimSpace(value.ShellHubURL))
+		if err != nil || (portal.Scheme != "http" && portal.Scheme != "https") || portal.Hostname() == "" || portal.User != nil {
+			return errors.New("ShellHub portal URL must be an absolute HTTP or HTTPS URL")
+		}
+	}
+	if value.ShellHubSSHPort < 1 || value.ShellHubSSHPort > 65535 {
+		return errors.New("ShellHub SSH port must be between 1 and 65535")
+	}
 	if value.DeviceOfflineMinutes < 2 || value.DeviceOfflineMinutes > 1440 {
 		return errors.New("offline window must be between 2 and 1440 minutes")
 	}

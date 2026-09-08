@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/soul-room/edge-agent/internal/applications"
 )
+
+const systemOSTreeRepo = "/ostree/repo"
 
 func NewAdapter(name, pluginDir string, runner Runner) (Adapter, error) {
 	if adapterNamePattern.MatchString(name) {
@@ -72,7 +75,31 @@ func (a *nativeAdapter) Check(ctx context.Context, request Request, artifact str
 	case "rauc":
 		_, err = a.runner.Run(ctx, "rauc", "info", artifact)
 	case "ostree":
-		_, err = a.runner.Run(ctx, "ostree", "static-delta", "verify", artifact)
+		if usesOSTreeRepository(request) {
+			remoteURL, remoteErr := a.runner.Run(ctx, "ostree", "--repo="+systemOSTreeRepo, "remote", "show-url", request.OSTreeRemote)
+			if remoteErr != nil {
+				return fmt.Errorf("OSTree remote %q is not configured: %w", request.OSTreeRemote, remoteErr)
+			}
+			parsed, parseErr := url.Parse(strings.TrimSpace(remoteURL))
+			if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" {
+				return errors.New("OSTree remote must use HTTPS")
+			}
+			group := `--group=remote "` + request.OSTreeRemote + `"`
+			if value, configErr := a.runner.Run(ctx, "ostree", "--repo="+systemOSTreeRepo, "config", "get", group, "gpg-verify"); configErr == nil && strings.EqualFold(strings.TrimSpace(value), "false") {
+				return errors.New("OSTree remote has GPG verification disabled")
+			}
+			if value, configErr := a.runner.Run(ctx, "ostree", "--repo="+systemOSTreeRepo, "config", "get", group, "tls-permissive"); configErr == nil && strings.EqualFold(strings.TrimSpace(value), "true") {
+				return errors.New("OSTree remote has permissive TLS enabled")
+			}
+			if value, configErr := a.runner.Run(ctx, "ostree", "--repo="+systemOSTreeRepo, "config", "get", group, "contenturl"); configErr == nil && strings.TrimSpace(value) != "" {
+				contentURL, contentErr := url.Parse(strings.TrimSpace(value))
+				if contentErr != nil || contentURL.Scheme != "https" || contentURL.Host == "" {
+					return errors.New("OSTree remote content URL must use HTTPS")
+				}
+			}
+			return nil
+		}
+		_, err = a.runner.Run(ctx, "ostree", "--repo="+systemOSTreeRepo, "static-delta", "verify", artifact)
 	case "swupdate":
 		_, err = a.runner.Run(ctx, "swupdate", "--check", "-i", artifact)
 	case "mender":
@@ -121,8 +148,21 @@ func (a *nativeAdapter) Install(ctx context.Context, request Request, artifact s
 		_, err := a.runner.Run(ctx, "rauc", "install", artifact)
 		return err
 	case "ostree":
-		_, err := a.runner.Run(ctx, "ostree", "static-delta", "apply-offline", artifact)
-		return err
+		if usesOSTreeRepository(request) {
+			if _, err := a.runner.Run(ctx, "ostree", "--repo="+systemOSTreeRepo, "pull", request.OSTreeRemote, request.OSTreeRef+"@"+strings.ToLower(request.OSTreeCommit)); err != nil {
+				return err
+			}
+		} else if _, err := a.runner.Run(ctx, "ostree", "--repo="+systemOSTreeRepo, "static-delta", "apply-offline", artifact); err != nil {
+			return err
+		}
+		resolved, err := a.runner.Run(ctx, "ostree", "--repo="+systemOSTreeRepo, "rev-parse", request.OSTreeCommit)
+		if err != nil {
+			return fmt.Errorf("OSTree target commit was not imported: %w", err)
+		}
+		if !strings.EqualFold(strings.TrimSpace(resolved), request.OSTreeCommit) {
+			return errors.New("OSTree repository did not resolve the pinned target commit")
+		}
+		return nil
 	case "swupdate":
 		_, err := a.runner.Run(ctx, "swupdate", "-i", artifact)
 		return err
@@ -136,10 +176,10 @@ func (a *nativeAdapter) Activate(ctx context.Context, request Request) error {
 		return nil
 	}
 	args := []string{"admin", "deploy"}
-	if request.Product != "" {
-		args = append(args, "--os="+request.Product)
+	if request.OSTreeOS != "" {
+		args = append(args, "--os="+request.OSTreeOS)
 	}
-	args = append(args, request.Version)
+	args = append(args, strings.ToLower(request.OSTreeCommit))
 	_, err := a.runner.Run(ctx, "ostree", args...)
 	return err
 }
@@ -184,8 +224,8 @@ func (a *nativeAdapter) Rollback(ctx context.Context, request Request, previous 
 			return errors.New("previous OSTree deployment checksum is unavailable")
 		}
 		args := []string{"admin", "deploy"}
-		if request.Product != "" {
-			args = append(args, "--os="+request.Product)
+		if request.OSTreeOS != "" {
+			args = append(args, "--os="+request.OSTreeOS)
 		}
 		args = append(args, previous)
 		_, err := a.runner.Run(ctx, "ostree", args...)

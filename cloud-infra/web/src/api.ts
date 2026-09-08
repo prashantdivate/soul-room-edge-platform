@@ -106,6 +106,8 @@ export type PlatformInfo = { device_gateway_endpoint: string; remote_access_prov
 export type PlatformSettings = {
   organization_name: string;
   company_domain?: string;
+  shellhub_url?: string;
+  shellhub_ssh_port: number;
   device_offline_minutes: number;
   default_telemetry_window: "15m" | "1h" | "24h";
   default_ota_pilot_percent: number;
@@ -135,6 +137,10 @@ export type OTACampaign = {
   flatpak_remote?: string;
   flatpak_commit?: string;
   flatpak_repository_url?: string;
+  ostree_remote?: string;
+  ostree_ref?: string;
+  ostree_commit?: string;
+  ostree_os?: string;
   target_device_ids: string[];
   canary_percent: number;
   state: string;
@@ -194,6 +200,11 @@ export async function login(email: string, password: string): Promise<Membership
   return response.memberships[0];
 }
 
+export async function restoreSession(): Promise<Membership> {
+  const response = await request<{ membership: Membership }>("/api/v1/auth/session");
+  return response.membership;
+}
+
 export async function logout(): Promise<void> {
   await request<{ status: string }>("/api/v1/auth/logout", { method: "POST" });
 }
@@ -201,17 +212,18 @@ export async function logout(): Promise<void> {
 export async function loadFleet(membership: Membership): Promise<FleetData> {
   const headers = { "X-Tenant-ID": membership.tenant_id };
   const get = <T,>(path: string) => request<T>(path, { headers });
-  const [orgs, devices, downstream, jobs, artifacts, audit, tokens, users, inventory, roles, applications, deployments, ota, platform, platformSettings] = await Promise.all([
+  const roles = await get<Record<string, string[]>>("/api/v1/roles");
+  const permissions = new Set(roles[membership.role] || []);
+  const [orgs, devices, downstream, jobs, artifacts, audit, tokens, users, inventory, applications, deployments, ota, platform, platformSettings] = await Promise.all([
     get<{ organizations: Organization[] }>("/api/v1/organizations"),
     get<{ devices: Device[] }>("/api/v1/devices"),
     get<{ downstream: Downstream[] }>("/api/v1/downstream"),
     get<{ jobs: Job[] }>("/api/v1/jobs"),
     get<{ artifacts: Artifact[] }>("/api/v1/artifacts"),
-    get<{ audit: AuditEvent[] }>("/api/v1/audit"),
+    permissions.has("audit.read") ? get<{ audit: AuditEvent[] }>("/api/v1/audit") : Promise.resolve({ audit: [] }),
     get<{ enrollment_tokens: EnrollmentToken[] }>("/api/v1/enrollment-tokens"),
     get<{ users: User[] }>("/api/v1/users"),
     get<{ inventory: Inventory }>("/api/v1/inventory"),
-    get<Record<string, string[]>>("/api/v1/roles"),
     get<{ applications: Record<string, unknown>[] }>("/api/v1/applications"),
     get<{ deployments: Record<string, unknown>[] }>("/api/v1/deployments"),
     get<{ ota_campaigns: OTACampaign[] }>("/api/v1/ota"),

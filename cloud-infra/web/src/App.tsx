@@ -16,7 +16,6 @@ import {
   Cpu,
   Database,
   Download,
-  ExternalLink,
   FileJson,
   FileText,
   Eye,
@@ -61,29 +60,6 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import type { SimpleIcon } from "simple-icons";
-import {
-  siAnydesk,
-  siApache,
-  siCurl,
-  siDocker,
-  siFlatpak,
-  siGit,
-  siGnubash,
-  siLinux,
-  siMariadb,
-  siMongodb,
-  siMysql,
-  siNginx,
-  siNodedotjs,
-  siOpenssl,
-  siPostgresql,
-  siPython,
-  siRabbitmq,
-  siRedis,
-  siTrivy,
-  siUbuntu,
-} from "simple-icons";
 import {
   Area,
   AreaChart,
@@ -123,10 +99,12 @@ import {
   PlatformSettings,
   promoteOTACampaign,
   resetPlatformSettings,
+  restoreSession,
   updatePlatformSettings,
   updateDevice,
 } from "./api";
-import { FleetMap } from "./FleetMap";
+const FleetMap = React.lazy(() => import("./FleetMap").then((module) => ({ default: module.FleetMap })));
+const PackageBrandIcon = React.lazy(() => import("./PackageBrandIcon"));
 
 type PageId =
   | "overview"
@@ -154,63 +132,108 @@ type NavigationGroup = { label: string; icon: React.ComponentType<{ size?: numbe
 
 const navigation: NavigationGroup[] = [
   {
-    label: "Monitor",
+    label: "Fleet",
     icon: LayoutGrid,
     pages: [
       { id: "overview", label: "Overview", description: "What needs attention across your fleet today.", icon: Gauge },
       { id: "devices", label: "Devices", description: "Search, inspect, and operate enrolled Linux devices.", icon: Cpu },
       { id: "gateways", label: "Gateways", description: "Gateway connections and downstream industrial equipment.", icon: GitBranch },
-      { id: "telemetry", label: "Telemetry", description: "Inspect normalized metric records and collection freshness.", icon: Activity },
       { id: "inventory", label: "Inventory", description: "Hardware and software facts reported by each device.", icon: Database },
       { id: "map", label: "Fleet map", description: "See the reported position and connectivity of every device.", icon: MapPinned },
     ],
   },
   {
-    label: "Operate",
+    label: "Operations",
     icon: TerminalSquare,
     pages: [
       { id: "jobs", label: "Jobs", description: "Run approved commands and follow results.", icon: TerminalSquare },
       { id: "remote", label: "Remote access", description: "Open audited ShellHub SSH sessions to online devices.", icon: Network },
       { id: "deployments", label: "Deployments", description: "Roll out applications in controlled stages.", icon: Rocket },
       { id: "ota", label: "Update campaigns", description: "Roll out operating-system and Flatpak application updates.", icon: CloudCog },
-      { id: "alerts", label: "Alerts", description: "Triage active issues and assign ownership.", icon: Bell },
     ],
   },
   {
-    label: "Manage",
+    label: "Management",
     icon: Layers3,
     pages: [
       { id: "profiles", label: "Profiles", description: "Reusable policy for telemetry, jobs, and updates.", icon: SlidersHorizontal },
       { id: "applications", label: "Applications", description: "Installed packages, advisory posture, and managed edge applications.", icon: Boxes },
       { id: "artifacts", label: "Artifacts", description: "Signed, immutable files available for delivery.", icon: UploadCloud },
       { id: "enrollment", label: "Enrollment", description: "Bring a device into the fleet with a one-time token.", icon: KeyRound },
-    ],
-  },
-  {
-    label: "Govern",
-    icon: ShieldCheck,
-    pages: [
-      { id: "audit", label: "Audit log", description: "A durable record of security and operator activity.", icon: ShieldCheck },
       { id: "users", label: "Users & roles", description: "Organization access and permission boundaries.", icon: UsersRound },
     ],
   },
   {
-    label: "Platform",
-    icon: ServerCog,
+    label: "Analysis",
+    icon: Activity,
     pages: [
-      { id: "health", label: "System health", description: "Live resource, network, capacity, and availability trends.", icon: RadioTower },
-      { id: "onprem", label: "On-prem admin", description: "Backup, certificates, storage, and platform lifecycle.", icon: ServerCog },
+      { id: "telemetry", label: "Telemetry", description: "Inspect normalized metric records and collection freshness.", icon: Activity },
+      { id: "health", label: "Device health", description: "Live resource, network, capacity, and availability trends.", icon: RadioTower },
+      { id: "alerts", label: "Alerts", description: "Triage active issues and assign ownership.", icon: Bell },
+      { id: "audit", label: "Audit log", description: "A durable record of security and operator activity.", icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "Settings",
+    icon: Settings2,
+    pages: [
+      { id: "onprem", label: "Platform settings", description: "Configuration, infrastructure, backup, certificates, and platform lifecycle.", icon: Settings2 },
     ],
   },
 ];
 
 const pageMap = Object.fromEntries(navigation.flatMap((group) => group.pages).map((page) => [page.id, page])) as Record<PageId, Page>;
+const membershipStorageKey = "soul_room_membership";
+const pageStorageKey = "soul_room_page";
+
+function restoredMembership(): Membership | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(membershipStorageKey) || "null") as Membership | null;
+    return value && typeof value.tenant_id === "string" && typeof value.user_id === "string" && typeof value.role === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function restoredPage(): PageId {
+  const value = sessionStorage.getItem(pageStorageKey) as PageId | null;
+  return value && pageMap[value] ? value : "overview";
+}
+
+const pagePermissions: Partial<Record<PageId, string>> = {
+  remote: "remote_access.create",
+  ota: "deployment.create",
+  profiles: "profile.manage",
+  enrollment: "device.enroll",
+  audit: "audit.read",
+  users: "user.manage",
+  onprem: "tenant.settings.manage",
+};
+
+export function navigationFor(data: FleetData) {
+  const permissions = new Set(data.roles[data.membership.role] || []);
+  return navigation.map((group) => ({ ...group, pages: group.pages.filter((page) => !pagePermissions[page.id] || permissions.has(pagePermissions[page.id]!)) })).filter((group) => group.pages.length > 0);
+}
+
+export function resolveShellHubURL(configuredURL: string, browserURL = window.location.href, useBrowserHost = true) {
+  try {
+    const browser = new URL(browserURL);
+    const target = new URL(configuredURL.trim() || `${browser.protocol}//${browser.hostname}:8088`);
+    if (useBrowserHost) {
+      target.hostname = browser.hostname;
+    }
+    return target.toString();
+  } catch {
+    return configuredURL;
+  }
+}
 
 export default function App() {
-  const [membership, setMembership] = React.useState<Membership | null>(null);
+  const [membership, setMembership] = React.useState<Membership | null>(() => restoredMembership());
   const [data, setData] = React.useState<FleetData | null>(null);
-  const [page, setPage] = React.useState<PageId>("overview");
-  const [loading, setLoading] = React.useState(false);
+  const [page, setPage] = React.useState<PageId>(() => restoredPage());
+  const [loading, setLoading] = React.useState(() => Boolean(restoredMembership()));
+  const [checkingSession, setCheckingSession] = React.useState(true);
   const [error, setError] = React.useState("");
   const [sidebarOpen, setSidebarOpen] = React.useState(() => window.innerWidth >= 840);
   const [search, setSearch] = React.useState("");
@@ -220,6 +243,25 @@ export default function App() {
   const [exportOpen, setExportOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
   const pageCanvasRef = React.useRef<HTMLDivElement>(null);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && window.innerWidth >= 620) {
+        event.preventDefault();
+        setSearchOpen(true);
+        searchInputRef.current?.focus();
+      }
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        setNotificationsOpen(false);
+        setProfileOpen(false);
+        setExportOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
 
   const refresh = React.useCallback(async (activeMembership: Membership) => {
     setLoading(true);
@@ -228,12 +270,35 @@ export default function App() {
       setData(await loadFleet(activeMembership));
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "The fleet could not be loaded.";
-      if (reason instanceof ApiError && reason.status === 401) setMembership(null);
+      if (reason instanceof ApiError && reason.status === 401) {
+        sessionStorage.removeItem(membershipStorageKey);
+        setMembership(null);
+        setData(null);
+      }
       setError(message);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  React.useEffect(() => {
+    sessionStorage.setItem(pageStorageKey, page);
+  }, [page]);
+
+  React.useEffect(() => {
+    if (membership) {
+      setCheckingSession(false);
+      return;
+    }
+    restoreSession().then((activeMembership) => {
+      sessionStorage.setItem(membershipStorageKey, JSON.stringify(activeMembership));
+      setMembership(activeMembership);
+    }).catch(() => undefined).finally(() => setCheckingSession(false));
+  }, []);
+
+  React.useEffect(() => {
+    if (membership && !data) refresh(membership);
+  }, [membership, data, refresh]);
 
   React.useEffect(() => {
 	if (!membership) return;
@@ -246,8 +311,8 @@ export default function App() {
     setError("");
     try {
       const activeMembership = await login(email, password);
+      sessionStorage.setItem(membershipStorageKey, JSON.stringify(activeMembership));
       setMembership(activeMembership);
-      await refresh(activeMembership);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Sign in failed.");
       setLoading(false);
@@ -256,27 +321,36 @@ export default function App() {
 
   async function handleLogout() {
 	try { await logout(); } finally {
+	  sessionStorage.removeItem(membershipStorageKey);
+	  sessionStorage.removeItem(pageStorageKey);
 	  setMembership(null);
 	  setData(null);
+	  setPage("overview");
 	  setProfileOpen(false);
 	  setNotificationsOpen(false);
 	}
   }
 
-  if (!membership || !data) {
+  if (checkingSession) return <SessionRestore label="Checking your secure session" />;
+  if (!membership) {
     return <Login loading={loading} error={error} onSubmit={handleLogin} />;
   }
+  if (!data) return <SessionRestore label={error || "Restoring your workspace"} onRetry={error ? () => refresh(membership) : undefined} />;
 
-  const activePage = pageMap[page];
+  const visibleNavigation = navigationFor(data);
+  const visiblePages = visibleNavigation.flatMap((group) => group.pages);
+  const activePageId = visiblePages.some((item) => item.id === page) ? page : visiblePages[0]?.id || "overview";
+  const activePage = pageMap[activePageId];
   const signedInUser = data.users.find((user) => user.id === data.membership.user_id);
   const alerts = deriveAlerts(data.devices, data.settings.device_offline_minutes);
-  const exportName = `soul-room-${page}-${new Date().toISOString().slice(0, 10)}`;
-  const pageExport = pageExportData(page, data);
+  const exportName = `soul-room-${activePageId}-${new Date().toISOString().slice(0, 10)}`;
+  const pageExport = pageExportData(activePageId, data);
   return (
     <div className={sidebarOpen ? "appShell" : "appShell collapsed"}>
       <Sidebar
-        active={page}
+        active={activePageId}
         alertCount={deriveAlerts(data.devices, data.settings.device_offline_minutes).length}
+        groups={visibleNavigation}
         open={sidebarOpen}
         onNavigate={(next) => {
           setPage(next);
@@ -297,17 +371,18 @@ export default function App() {
             <div className="globalSearchWrap">
               <label className="globalSearch">
                 <Search size={17} />
-                <input value={search} onFocus={() => setSearchOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { setSearch(""); setSearchOpen(false); } }} onChange={(event) => { setSearch(event.target.value); setSearchOpen(true); }} placeholder="Search fleet" aria-label="Search devices, jobs, users, and updates" />
+                <input ref={searchInputRef} value={search} onFocus={() => setSearchOpen(true)} onChange={(event) => { setSearch(event.target.value); setSearchOpen(true); }} placeholder="Search or jump" aria-label="Search records and pages" aria-keyshortcuts="Control+K Meta+K" />
+                {!search && <kbd>Ctrl K</kbd>}
                 {search && <button type="button" onClick={() => { setSearch(""); setSearchOpen(false); }} aria-label="Clear search"><X size={14} /></button>}
               </label>
-              {searchOpen && search.trim() && <GlobalSearchResults data={data} query={search} onSelect={(result) => { setPage(result.page); setSearch(""); setSearchOpen(false); }} />}
+              {searchOpen && <GlobalSearchResults data={data} pages={visiblePages} query={search} onSelect={(result) => { setPage(result.page); setSearch(""); setSearchOpen(false); }} />}
             </div>
             <div className="topbarAction">
               <button className="iconButton notificationButton" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen(!notificationsOpen); setProfileOpen(false); }}>
                 <Bell size={18} />
                 {alerts.length > 0 && <span />}
               </button>
-              {notificationsOpen && <div className="topbarPopover notificationsPopover"><header><strong>Notifications</strong><span>{alerts.length} active</span></header>{alerts.length ? alerts.slice(0, 5).map((alert) => <button key={alert.id} onClick={() => { setPage(alert.page); setNotificationsOpen(false); }}><AlertTriangle size={16} /><span><strong>{alert.title}</strong><small>{alert.device} - {alert.detail}</small></span></button>) : <div className="popoverEmpty"><Check size={18} /><span>No active device alerts</span></div>}<button className="popoverFooter" onClick={() => { setPage("alerts"); setNotificationsOpen(false); }}>View alerts</button></div>}
+              {notificationsOpen && <div className="topbarPopover notificationsPopover"><header><strong>Notifications</strong><span>{alerts.length} active</span></header>{alerts.length ? alerts.slice(0, 5).map((alert) => <button key={alert.id} onClick={() => { setPage(visiblePages.some((item) => item.id === alert.page) ? alert.page : "devices"); setNotificationsOpen(false); }}><AlertTriangle size={16} /><span><strong>{alert.title}</strong><small>{alert.device} - {alert.detail}</small></span></button>) : <div className="popoverEmpty"><Check size={18} /><span>No active device alerts</span></div>}<button className="popoverFooter" onClick={() => { setPage("alerts"); setNotificationsOpen(false); }}>View alerts</button></div>}
             </div>
             <div className="topbarAction">
               <button className="userMenu" aria-label="Account menu" aria-expanded={profileOpen} onClick={() => { setProfileOpen(!profileOpen); setNotificationsOpen(false); }}>
@@ -339,24 +414,29 @@ export default function App() {
           </section>
 
           {error && <div className="inlineError"><TriangleAlert size={17} />{error}<button onClick={() => setError("")}><X size={15} /></button></div>}
-          <PageContent page={page} data={data} search={search} onData={setData} onNavigate={setPage} onRefresh={() => refresh(membership)} />
+          <PageContent page={activePageId} data={data} search={search} onData={setData} onNavigate={setPage} onRefresh={() => refresh(membership)} />
         </div>
       </main>
     </div>
   );
 }
 
-function Sidebar({ active, open, alertCount, onNavigate }: { active: PageId; open: boolean; alertCount: number; onNavigate: (page: PageId) => void }) {
-  const activeGroup = navigation.find((group) => group.pages.some((page) => page.id === active)) || navigation[0];
+function SessionRestore({ label, onRetry }: { label: string; onRetry?: () => void }) {
+  return <main className="sessionRestore"><img src="/soul-room-mark-transparent.png?v=1" alt="Soul Room" /><LoaderCircle className="spin" size={22} /><span>{label}</span>{onRetry && <button className="button secondary" onClick={onRetry}>Try again</button>}</main>;
+}
+
+function Sidebar({ active, open, alertCount, groups, onNavigate }: { active: PageId; open: boolean; alertCount: number; groups: NavigationGroup[]; onNavigate: (page: PageId) => void }) {
+  const [railExpanded, setRailExpanded] = React.useState(() => localStorage.getItem("soul_room_nav_expanded") !== "false");
+  React.useEffect(() => { localStorage.setItem("soul_room_nav_expanded", String(railExpanded)); }, [railExpanded]);
+  const activeGroup = groups.find((group) => group.pages.some((page) => page.id === active)) || groups[0];
   return (
-    <aside className={open ? "sidebar open" : "sidebar"} aria-label="Primary navigation">
+    <aside className={`${open ? "sidebar open" : "sidebar"}${railExpanded ? " railExpanded" : ""}`} aria-label="Primary navigation">
       <div className="navRail">
-        <div className="railBrand"><img src="/soul-room-mark.png?v=2" alt="Soul Room" /></div>
-        <nav aria-label="Workspace groups">{navigation.map((group) => { const Icon = group.icon; const selected = group === activeGroup; return <button key={group.label} className={selected ? "railButton active" : "railButton"} onClick={() => onNavigate(group.pages[0].id)} title={group.label} aria-label={group.label}><Icon size={20} />{group.label === "Operate" && alertCount > 0 && <i />}</button>; })}</nav>
-        <span className="railStatus" title="Platform online"><i /></span>
+        <div className="railHeader"><button className="railToggle" type="button" onClick={() => setRailExpanded(!railExpanded)} aria-label={railExpanded ? "Collapse navigation sections" : "Expand navigation sections"} aria-expanded={railExpanded}>{railExpanded ? <PanelLeftClose size={19} /> : <PanelLeftOpen size={19} />}<span>Collapse</span></button></div>
+        <nav aria-label="Workspace groups">{groups.map((group) => { const Icon = group.icon; const selected = group === activeGroup; return <button key={group.label} className={selected ? "railButton active" : "railButton"} onClick={() => onNavigate(group.pages[0].id)} title={railExpanded ? undefined : group.label} aria-label={group.label}><Icon size={20} /><span>{group.label}</span>{group.pages.some((item) => item.id === "alerts") && alertCount > 0 && <i />}</button>; })}</nav>
       </div>
       <div className="navPanel">
-        <div className="brand"><img src="/soul-room-mark.png?v=2" alt="Soul Room" /></div>
+        <div className="brand"><img src="/soul-room-mark-transparent.png?v=1" alt="Soul Room" /></div>
         <div className="navContext"><span>Workspace</span><strong>{activeGroup.label}</strong></div>
         <nav className="navScroll">
           <div className="navGroup">
@@ -366,7 +446,6 @@ function Sidebar({ active, open, alertCount, onNavigate }: { active: PageId; ope
             })}
           </div>
         </nav>
-        <div className="sidebarFoot"><span className="connectionDot" /><div><strong>Soul Room Local</strong><span>All services healthy</span></div></div>
       </div>
     </aside>
   );
@@ -374,16 +453,18 @@ function Sidebar({ active, open, alertCount, onNavigate }: { active: PageId; ope
 
 type SearchResult = { id: string; label: string; detail: string; category: string; page: PageId };
 
-function GlobalSearchResults({ data, query, onSelect }: { data: FleetData; query: string; onSelect: (result: SearchResult) => void }) {
+function GlobalSearchResults({ data, pages, query, onSelect }: { data: FleetData; pages: Page[]; query: string; onSelect: (result: SearchResult) => void }) {
   const needle = query.trim().toLowerCase();
+  const allowed = new Set(pages.map((page) => page.id));
   const results: SearchResult[] = [
+    ...pages.map((page) => ({ id: `page-${page.id}`, label: page.label, detail: page.description, category: "Page", page: page.id })),
     ...data.devices.map((device) => ({ id: `device-${device.id}`, label: device.display_name, detail: [device.hardware_model, device.os, device.serial].filter(Boolean).join(" · "), category: "Device", page: "devices" as PageId })),
     ...data.jobs.map((job) => ({ id: `job-${job.id}`, label: job.type.replaceAll("_", " "), detail: `${nameFor(data, job.device_id)} · ${job.state} · ${shortId(job.id)}`, category: "Job", page: "jobs" as PageId })),
-    ...data.otaCampaigns.map((campaign) => ({ id: `ota-${campaign.id}`, label: campaign.name, detail: `${campaign.adapter} · ${campaign.flatpak_ref || campaign.version} · ${campaign.state}`, category: "Update", page: "ota" as PageId })),
-    ...data.users.map((user) => ({ id: `user-${user.id}`, label: user.email, detail: user.role.replaceAll("_", " "), category: "User", page: "users" as PageId })),
-    ...data.audit.map((event) => ({ id: `audit-${event.id}`, label: event.action, detail: `${event.resource_type} · ${event.result}`, category: "Audit", page: "audit" as PageId })),
+    ...(allowed.has("ota") ? data.otaCampaigns : []).map((campaign) => ({ id: `ota-${campaign.id}`, label: campaign.name, detail: `${campaign.adapter} · ${campaign.flatpak_ref || campaign.version} · ${campaign.state}`, category: "Update", page: "ota" as PageId })),
+    ...(allowed.has("users") ? data.users : []).map((user) => ({ id: `user-${user.id}`, label: user.email, detail: user.role.replaceAll("_", " "), category: "User", page: "users" as PageId })),
+    ...(allowed.has("audit") ? data.audit : []).map((event) => ({ id: `audit-${event.id}`, label: event.action, detail: `${event.resource_type} · ${event.result}`, category: "Audit", page: "audit" as PageId })),
   ].filter((result) => `${result.label} ${result.detail} ${result.category}`.toLowerCase().includes(needle)).slice(0, 8);
-  return <div className="searchPopover" role="listbox"><header><strong>Fleet search</strong><span>{results.length} result{results.length === 1 ? "" : "s"}</span></header>{results.length ? results.map((result) => <button type="button" role="option" key={result.id} onMouseDown={(event) => event.preventDefault()} onClick={() => onSelect(result)}><span className="searchResultIcon"><Search size={14} /></span><span><strong>{result.label}</strong><small>{result.detail || "No additional details"}</small></span><em>{result.category}</em></button>) : <div className="popoverEmpty"><PackageSearch size={18} /><span>No fleet records match “{query.trim()}”</span></div>}</div>;
+  return <div className="searchPopover" role="listbox"><header><strong>{query.trim() ? "Search results" : "Jump to a page"}</strong><span>{results.length} result{results.length === 1 ? "" : "s"}</span></header>{results.length ? results.map((result) => <button type="button" role="option" key={result.id} onMouseDown={(event) => event.preventDefault()} onClick={() => onSelect(result)}><span className="searchResultIcon"><Search size={14} /></span><span><strong>{result.label}</strong><small>{result.detail || "No additional details"}</small></span><em>{result.category}</em></button>) : <div className="popoverEmpty"><PackageSearch size={18} /><span>No records match “{query.trim()}”</span></div>}</div>;
 }
 
 function Login({ loading, error, onSubmit }: { loading: boolean; error: string; onSubmit: (email: string, password: string) => void }) {
@@ -403,14 +484,14 @@ function Login({ loading, error, onSubmit }: { loading: boolean; error: string; 
   return (
     <main className="loginPage">
       <section className="loginStory">
-        <div className="loginBrand"><img src="/soul-room-mark.png?v=2" alt="Soul Room" /></div>
+        <div className="loginBrand"><img src="/soul-room-mark-transparent.png?v=1" alt="Soul Room" /></div>
         <div className="storyCopy"><span>Edge operations, composed</span><h1>A calm room for every connected device.</h1><p>Observe health, understand software risk, and deliver controlled changes across embedded Linux fleets.</p></div>
         <div className="operationsScene" aria-hidden="true">
           <motion.div className="sceneLane edgeLane" initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .55 }}>
             <span><Cpu size={18} /></span><span><RadioTower size={18} /></span><span><GitBranch size={18} /></span><small>EDGE FLEET</small>
           </motion.div>
           <div className="signalPath leftPath">{[0, 1, 2].map((packet) => <motion.i key={packet} animate={reduceMotion ? undefined : { left: ["2%", "88%"], opacity: [0, 1, 1, 0] }} transition={{ duration: 2.5, repeat: Infinity, delay: packet * .8, ease: "easeInOut" }} />)}</div>
-          <motion.div className="sceneCore" initial={{ opacity: 0, scale: .78 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 170, damping: 18, delay: .2 }}><img src="/soul-room-mark.png?v=2" alt="" /><span>CONTROL PLANE</span><motion.b animate={reduceMotion ? undefined : { scale: [1, 1.18, 1], opacity: [.45, .12, .45] }} transition={{ duration: 2.8, repeat: Infinity }} /></motion.div>
+          <motion.div className="sceneCore" initial={{ opacity: 0, scale: .78 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 170, damping: 18, delay: .2 }}><img src="/soul-room-mark-transparent.png?v=1" alt="" /><span>CONTROL PLANE</span><motion.b animate={reduceMotion ? undefined : { scale: [1, 1.18, 1], opacity: [.45, .12, .45] }} transition={{ duration: 2.8, repeat: Infinity }} /></motion.div>
           <div className="signalPath rightPath">{[0, 1, 2].map((packet) => <motion.i key={packet} animate={reduceMotion ? undefined : { left: ["2%", "88%"], opacity: [0, 1, 1, 0] }} transition={{ duration: 2.8, repeat: Infinity, delay: packet * .9, ease: "easeInOut" }} />)}</div>
           <motion.div className="sceneLane controlLane" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: .55, delay: .15 }}>
             <span><ShieldCheck size={18} /></span><span><CloudCog size={18} /></span><span><TerminalSquare size={18} /></span><small>OPERATIONS</small>
@@ -420,7 +501,7 @@ function Login({ loading, error, onSubmit }: { loading: boolean; error: string; 
       </section>
       <section className="loginFormWrap">
         <motion.form className="loginForm" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .5, delay: .12 }} onSubmit={(event) => { event.preventDefault(); if (canSubmit) onSubmit(email.trim().toLowerCase(), password); }}>
-          <div className="mobileLoginBrand"><img src="/soul-room-mark.png?v=2" alt="Soul Room" /></div>
+          <div className="mobileLoginBrand"><img src="/soul-room-mark-transparent.png?v=1" alt="Soul Room" /></div>
           <div className="workspaceBadge"><ShieldCheck size={14} /><span>Private company workspace</span></div>
           <div className="formIntro"><h2>Welcome back</h2><p>Use the account provided by your organization administrator.</p></div>
           {error && <div className="formError"><AlertTriangle size={17} />{error}</div>}
@@ -443,14 +524,14 @@ function PageContent({ page, data, search, onData, onNavigate, onRefresh }: { pa
     case "gateways": return <Gateways {...props} />;
     case "telemetry": return <Telemetry {...props} />;
     case "inventory": return <InventoryView {...props} />;
-    case "map": return <FleetMap data={data} onData={onData} onRemote={(device) => { sessionStorage.setItem("soul_room_remote_device", device.id); onNavigate("remote"); }} />;
+    case "map": return <React.Suspense fallback={<PageLoading label="Loading fleet map" />}><FleetMap data={data} onData={onData} onRemote={(device) => { sessionStorage.setItem("soul_room_remote_device", device.id); onNavigate("remote"); }} /></React.Suspense>;
     case "jobs": return <Jobs {...props} />;
     case "remote": return <RemoteAccess {...props} />;
     case "deployments": return <Deployments data={data} />;
     case "ota": return <OTA data={data} onData={onData} />;
     case "alerts": return <Alerts data={data} />;
     case "profiles": return <Profiles data={data} />;
-    case "applications": return <Applications data={data} onData={onData} />;
+    case "applications": return <React.Suspense fallback={<PageLoading label="Loading software catalog" />}><Applications data={data} onData={onData} /></React.Suspense>;
     case "artifacts": return <Artifacts data={data} />;
     case "enrollment": return <Enrollment {...props} />;
     case "audit": return <Audit data={data} search={search} />;
@@ -474,8 +555,8 @@ function Overview({ data, onNavigate }: ViewProps) {
       <Metric label="Jobs waiting" value={String(data.jobs.filter((job) => job.state === "queued").length)} note="Will deliver on reconnect" tone="amber" icon={<Clock3 size={18} />} />
       <Metric label="Update coverage" value={`${Math.round(current * 100 / data.devices.length)}%`} note={`${current} of ${data.devices.length} devices current`} tone="blue" icon={<PackageCheck size={18} />} />
     </section>
-    <Panel title="Fleet availability" subtitle="Current presence reported by agents" action={<button className="textButton" onClick={() => onNavigate("health")}>Open system health <ChevronRight size={15} /></button>}>
-      <div className="overviewAvailability"><div className="donutChart"><PresenceChart connected={connected} total={data.devices.length} /></div><div className="availabilityCopy"><span className="overline">Heartbeat posture</span><strong>{connected === data.devices.length ? "Every device is reachable" : `${data.devices.length - connected} device${data.devices.length - connected === 1 ? "" : "s"} need a connection check`}</strong><p>Soul Room marks a device offline only when its real heartbeat exceeds the presence window. Host resource charts live in System Health.</p></div></div>
+    <Panel title="Fleet availability" subtitle="Current presence reported by agents" action={<button className="textButton" onClick={() => onNavigate("health")}>Open device health <ChevronRight size={15} /></button>}>
+      <div className="overviewAvailability"><div className="donutChart"><PresenceChart connected={connected} total={data.devices.length} /></div><div className="availabilityCopy"><span className="overline">Heartbeat posture</span><strong>{connected === data.devices.length ? "Every device is reachable" : `${data.devices.length - connected} device${data.devices.length - connected === 1 ? "" : "s"} need a connection check`}</strong><p>Soul Room marks a device offline only when its real heartbeat exceeds the presence window. Host resource charts live in Device Health.</p></div></div>
     </Panel>
     <Panel title="Attention queue" subtitle="Generated from current device health, presence, and certificate dates">
       {alerts.length ? <div className="attentionList">{alerts.map((alert) => <Attention key={alert.id} severity={alert.severity} title={alert.title} detail={alert.detail} action="Review" onClick={() => onNavigate(alert.page)} />)}</div> : <EmptyState text="No device issues are active." />}
@@ -520,7 +601,7 @@ function Devices({ data, search, onNavigate, onData }: ViewProps) {
       <div className="deviceIdentity"><div className="deviceGlyph"><Cpu size={25} /></div><div><Badge value={selected.presence} /><p>{selected.hardware_model}</p></div></div>
       <DetailList items={[["Serial", selected.serial], ["Profile", selected.profile_id], ["Operating system", selected.os], ["Kernel", selected.kernel], ["Architecture", selected.architecture], ["Agent", selected.agent_version], ["Last seen", formatDate(selected.last_seen_at)], ["Certificate expires", formatDate(selected.certificate_expires_at)]]} />
       <h3>Capabilities</h3><div className="tagRow">{selected.capabilities?.map((value) => <span className="tag" key={value}>{value}</span>)}</div>
-      <div className="drawerActions"><button className="button warningButton" onClick={() => { setSelected(null); onNavigate("jobs"); }}><TerminalSquare size={16} /> Run job</button><button className="button infoButton" onClick={() => { setSelected(null); onNavigate("health"); }}><Activity size={16} /> System health</button>{canDelete && <button className="button dangerButton" onClick={() => { setDeleteTarget(selected); setSelected(null); }}><Trash2 size={16} /> Remove device</button>}</div>
+      <div className="drawerActions"><button className="button warningButton" onClick={() => { setSelected(null); onNavigate("jobs"); }}><TerminalSquare size={16} /> Run job</button><button className="button infoButton" onClick={() => { setSelected(null); onNavigate("health"); }}><Activity size={16} /> Device health</button>{canDelete && <button className="button dangerButton" onClick={() => { setDeleteTarget(selected); setSelected(null); }}><Trash2 size={16} /> Remove device</button>}</div>
     </Drawer>}
     {deleteTarget && <Modal title="Remove registered device" onClose={() => !deleting && setDeleteTarget(null)}><div className="modalForm"><div className="destructiveNotice"><Trash2 size={20} /><div><strong>{deleteTarget.display_name}</strong><span>This removes its registration, telemetry, inventory, pending jobs, and update targeting. Audit records remain.</span></div></div>{deleteError && <div className="formError"><AlertTriangle size={17} />{deleteError}</div>}<div className="modalActions"><button className="button secondary" disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</button><button className="button dangerButton" disabled={deleting} onClick={removeDevice}>{deleting ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />} Remove device</button></div></div></Modal>}
   </>;
@@ -619,17 +700,17 @@ function RemoteAccess({ data, onData }: ViewProps) {
   const [sshId, setSSHId] = React.useState(device?.remote_access_id || "");
   const [message, setMessage] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const shellHubURL = React.useCallback((url: string) => resolveShellHubURL(url, window.location.href, data.platform.remote_access_managed), [data.platform.remote_access_managed]);
+  const [portalURL, setPortalURL] = React.useState(() => shellHubURL(data.platform.remote_access_url));
   React.useEffect(() => { setSSHId(device?.remote_access_id || ""); }, [device?.id, device?.remote_access_id]);
-  function openShellHub() { window.open(data.platform.remote_access_url, "_blank", "noopener,noreferrer"); }
+  React.useEffect(() => { setPortalURL(shellHubURL(data.platform.remote_access_url)); }, [data.platform.remote_access_url, shellHubURL]);
   if (!device) return <>
     <section className="remoteHero">
       <div className="remoteHeroIcon"><TerminalSquare size={26} /></div>
       <div><span className="overline">Included ShellHub gateway</span><h2>Remote access is ready for setup</h2><p>Create the ShellHub administrator and namespace, then enroll your first fleet device.</p></div>
       <Badge value="included" />
     </section>
-    <Panel title="ShellHub administration" subtitle="One-time setup for the remote-access service included with Soul Room">
-      <div className="emptyAction"><p>Open the local ShellHub portal, complete its setup wizard, and keep the generated tenant ID for the device agent.</p><button className="button primary" onClick={openShellHub}><ExternalLink size={16} /> Open ShellHub portal</button></div>
-    </Panel>
+    <EmbeddedShellHub url={portalURL} />
   </>;
   async function saveMapping() {
     setSaving(true); setMessage("");
@@ -642,14 +723,14 @@ function RemoteAccess({ data, onData }: ViewProps) {
     try {
       const access = await createRemoteAccess(data.membership, device.id, systemUser);
       if (copyOnly) { await navigator.clipboard.writeText(access.ssh_command); setMessage("SSH command copied."); }
-      else window.open(access.launch_url, "_blank", "noopener,noreferrer");
+      else { setPortalURL(shellHubURL(access.launch_url)); setMessage("Select the device in the console below to start the session."); }
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Remote access could not be opened."); }
   }
   return <>
     <section className="remoteHero">
       <div className="remoteHeroIcon"><TerminalSquare size={26} /></div>
       <div><span className="overline">Included ShellHub gateway</span><h2>Audited remote maintenance</h2><p>Device connections stay outbound-only; the bundled ShellHub service owns SSH keys, firewall policy, and session records.</p></div>
-      <button className="button secondary" onClick={openShellHub}><ExternalLink size={16} /> ShellHub portal</button>
+      <Badge value={data.platform.remote_access_configured ? "ready" : "not configured"} />
     </section>
     <section className="remoteLayout">
       <Panel title="Open a terminal" subtitle="Select an online device and its existing Linux user">
@@ -665,7 +746,14 @@ function RemoteAccess({ data, onData }: ViewProps) {
         <div className="remoteForm"><label>ShellHub SSHID<input value={sshId} onChange={(event) => setSSHId(event.target.value)} placeholder="namespace.device@your-shellhub-host" /></label><button className="button successButton" onClick={saveMapping} disabled={saving || !sshId.trim()}><Save size={16} />{saving ? "Saving..." : "Save mapping"}</button><div className="remoteChecklist"><div className={device.presence === "connected" ? "done" : ""}><Check size={15} /><span>Fleet agent online</span></div><div className={Boolean(device.remote_access_id) ? "done" : ""}><Check size={15} /><span>ShellHub device accepted</span></div><div className={data.platform.remote_access_managed ? "done" : ""}><Check size={15} /><span>Local ShellHub service included</span></div></div></div>
       </Panel>
     </section>
+    <EmbeddedShellHub url={portalURL} />
   </>;
+}
+
+function EmbeddedShellHub({ url }: { url: string }) {
+  const [loaded, setLoaded] = React.useState(false);
+  React.useEffect(() => { setLoaded(false); }, [url]);
+  return <section className="shellHubFrame"><header><div><span className="overline">Remote access workspace</span><strong>ShellHub console</strong></div><div className="shellHubAddress"><span>{url ? new URL(url).host : "Not configured"}</span><Badge value="self-hosted" /></div></header><div className="shellHubViewport">{!loaded && <div className="shellHubLoading"><LoaderCircle className="spin" size={21} /><span>Loading secure console</span></div>}{url ? <iframe key={url} title="ShellHub remote access portal" src={url} onLoad={() => setLoaded(true)} sandbox="allow-downloads allow-forms allow-modals allow-popups allow-same-origin allow-scripts" /> : <div className="shellHubUnavailable"><TerminalSquare size={26} /><strong>ShellHub is not configured</strong><span>Add the portal URL under Settings, then return here.</span></div>}</div></section>;
 }
 
 function Deployments({ data }: { data: FleetData }) {
@@ -683,9 +771,13 @@ function OTA({ data, onData }: { data: FleetData; onData: (data: FleetData) => v
   const [artifactSize, setArtifactSize] = React.useState(""); const [compatibleFrom, setCompatibleFrom] = React.useState("");
   const [flatpakRef, setFlatpakRef] = React.useState(""); const [flatpakRemote, setFlatpakRemote] = React.useState("flathub"); const [flatpakCommit, setFlatpakCommit] = React.useState("");
   const [flatpakRepositoryURL, setFlatpakRepositoryURL] = React.useState("");
+  const [ostreeSource, setOSTreeSource] = React.useState<"repository" | "delta">("repository"); const [ostreeRemote, setOSTreeRemote] = React.useState("origin");
+  const [ostreeRef, setOSTreeRef] = React.useState(""); const [ostreeCommit, setOSTreeCommit] = React.useState(""); const [ostreeOS, setOSTreeOS] = React.useState("");
   const [canary, setCanary] = React.useState(data.settings.default_ota_pilot_percent); const [targets, setTargets] = React.useState<string[]>([]); const [error, setError] = React.useState(""); const [saving, setSaving] = React.useState(false);
   const selectedAdapter = adapter === "custom" ? customAdapter.trim().toLowerCase() : adapter;
   const isFlatpak = selectedAdapter === "flatpak";
+  const isOSTree = selectedAdapter === "ostree";
+  const isOSTreeRepository = isOSTree && ostreeSource === "repository";
   const capable = data.devices.filter((device) => selectedAdapter && device.capabilities?.includes(`ota:${selectedAdapter}`));
   async function create() {
     setError("");
@@ -694,11 +786,13 @@ function OTA({ data, onData }: { data: FleetData; onData: (data: FleetData) => v
     if (isFlatpak && flatpakCommit && !/^[a-f0-9]{64}$/i.test(flatpakCommit)) { setError("Flatpak commit must be a 64-character OSTree commit."); return; }
     if (isFlatpak && flatpakRepositoryURL && !/^https:\/\/[^/]+\/.+\.flatpakrepo$/i.test(flatpakRepositoryURL)) { setError("Repository URL must use HTTPS and point to a .flatpakrepo descriptor."); return; }
     if (!selectedAdapter || !/^[a-z][a-z0-9-]{1,31}$/.test(selectedAdapter)) { setError("Select an update mechanism or enter a valid installed plugin name."); return; }
-    if (!isFlatpak && (!artifactUrl || !digest || !signature || !signingKeyID || !product)) { setError("Complete the signed operating-system update metadata."); return; }
-    if (!isFlatpak && !/^https:\/\//i.test(artifactUrl)) { setError("Artifact URL must use HTTPS."); return; }
-    if (!isFlatpak && !/^[a-f0-9]{64}$/i.test(digest)) { setError("Digest must be a 64-character SHA-256 value."); return; }
+    if (!isFlatpak && (!signature || !signingKeyID || !product)) { setError("Complete the signed operating-system update metadata."); return; }
+    if (isOSTree && !/^[a-f0-9]{64}$/i.test(ostreeCommit)) { setError("OSTree target commit must be a 64-character checksum."); return; }
+    if (isOSTreeRepository && (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(ostreeRemote) || !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(ostreeRef))) { setError("Enter the preconfigured OSTree remote and branch/ref."); return; }
+    if (!isFlatpak && !isOSTreeRepository && (!artifactUrl || !/^https:\/\//i.test(artifactUrl))) { setError("Artifact URL must use HTTPS."); return; }
+    if (!isFlatpak && !isOSTreeRepository && !/^[a-f0-9]{64}$/i.test(digest)) { setError("Digest must be a 64-character SHA-256 value."); return; }
     setSaving(true);
-    try { const campaign = await createOTACampaign(data.membership, { name, artifact_id: "", artifact_url: isFlatpak ? "" : artifactUrl, artifact_size: isFlatpak || !artifactSize ? 0 : Number(artifactSize), version, product: isFlatpak ? "flatpak-application" : product, architecture: isFlatpak ? "" : architecture, digest: isFlatpak ? "" : digest, signature: isFlatpak ? "" : signature, signing_key_id: isFlatpak ? "" : signingKeyID, compatible_from: compatibleFrom.split(",").map((value) => value.trim()).filter(Boolean), adapter: selectedAdapter, flatpak_ref: flatpakRef, flatpak_remote: flatpakRemote, flatpak_commit: flatpakCommit, flatpak_repository_url: flatpakRepositoryURL, target_device_ids: targets, canary_percent: canary }); onData({ ...data, otaCampaigns: [campaign, ...data.otaCampaigns] }); setShowCreate(false); }
+    try { const campaign = await createOTACampaign(data.membership, { name, artifact_id: "", artifact_url: isFlatpak || isOSTreeRepository ? "" : artifactUrl, artifact_size: isFlatpak || isOSTreeRepository || !artifactSize ? 0 : Number(artifactSize), version, product: isFlatpak ? "flatpak-application" : product, architecture: isFlatpak ? "" : architecture, digest: isFlatpak ? "" : isOSTreeRepository ? ostreeCommit : digest, signature: isFlatpak ? "" : signature, signing_key_id: isFlatpak ? "" : signingKeyID, compatible_from: compatibleFrom.split(",").map((value) => value.trim()).filter(Boolean), adapter: selectedAdapter, flatpak_ref: flatpakRef, flatpak_remote: flatpakRemote, flatpak_commit: flatpakCommit, flatpak_repository_url: flatpakRepositoryURL, ostree_remote: isOSTreeRepository ? ostreeRemote : "", ostree_ref: isOSTreeRepository ? ostreeRef : "", ostree_commit: isOSTree ? ostreeCommit : "", ostree_os: isOSTree ? ostreeOS : "", target_device_ids: targets, canary_percent: canary }); onData({ ...data, otaCampaigns: [campaign, ...data.otaCampaigns] }); setShowCreate(false); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Campaign could not be created."); }
     finally { setSaving(false); }
   }
@@ -711,7 +805,7 @@ function OTA({ data, onData }: { data: FleetData; onData: (data: FleetData) => v
     <div className="safetyBanner"><ShieldCheck size={21} /><div><strong>Start small, then continue with confidence</strong><span>The pilot group receives the update first. Only devices advertising the selected adapter can be targeted, and the remaining fleet waits for approval.</span></div></div>
     {error && !showCreate && <div className="inlineError"><AlertTriangle size={17} />{error}<button onClick={() => setError("")}><X size={15} /></button></div>}
     <Panel title="Update campaigns" subtitle="Operating-system releases and Flatpak application rollouts"><SimpleTable headers={["Campaign", "Targets", "Type", "Release", "Pilot group", "State", "Created", "Action"]} rows={data.otaCampaigns.map((campaign) => [campaign.name, campaign.target_device_ids.length, campaign.adapter === "flatpak" ? "Flatpak app" : `${campaign.adapter} OS`, campaign.adapter === "flatpak" ? campaign.flatpak_ref || campaign.version : `${campaign.version} / ${campaign.architecture}`, `${campaign.canary_percent}%`, <Badge value={formatCampaignState(campaign.state)} />, formatDate(campaign.created_at), campaign.state === "canary_complete" ? <button className="button successButton compactButton" onClick={() => promote(campaign.id)}><Play size={14} /> Continue rollout</button> : <span className="tableMuted">-</span>])} empty="Create an update campaign to begin a controlled rollout." /></Panel>
-    {showCreate && <Modal title="Create update campaign" onClose={() => setShowCreate(false)}><div className="modalForm otaForm"><div className="formGrid"><label>Campaign name<input value={name} onChange={(event) => setName(event.target.value)} placeholder={isFlatpak ? "Kiosk application 1.4" : "August security release"} /></label><label>Release version<input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="2026.08.1" /></label><label>Update mechanism<select value={adapter} onChange={(event) => { setAdapter(event.target.value); setTargets([]); }}><option value="mender">Mender</option><option value="rauc">RAUC</option><option value="ostree">OSTree</option><option value="swupdate">SWUpdate</option><option value="flatpak">Flatpak application</option><option value="custom">Installed plugin</option></select></label><label>Pilot group (%)<div className="rangeField"><input type="range" min="1" max="100" value={canary} onChange={(event) => setCanary(Number(event.target.value))} /><output>{canary}%</output></div><span className="formHint">This percentage updates first. Continue only after those devices succeed.</span></label>{adapter === "custom" && <label>Plugin name<input value={customAdapter} onChange={(event) => { setCustomAdapter(event.target.value); setTargets([]); }} placeholder="my-updater" /></label>}{!isFlatpak && <><label>Device product<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="embedded-linux" /></label><label>Architecture<select value={architecture} onChange={(event) => { setArchitecture(event.target.value); setTargets([]); }}><option value="arm64">64-bit ARM (arm64 / aarch64)</option><option value="armv7">32-bit ARM (armv7 / armhf)</option><option value="amd64">x86-64 (amd64)</option></select></label></>}</div>{isFlatpak ? <><div className="formSectionLabel">Flatpak application</div><label>Application reference<input value={flatpakRef} onChange={(event) => setFlatpakRef(event.target.value.trim())} placeholder="com.example.Kiosk" /></label><div className="formGrid"><label>Remote name<input value={flatpakRemote} onChange={(event) => setFlatpakRemote(event.target.value.trim())} placeholder="factory" /></label><label>OSTree commit (optional)<input value={flatpakCommit} onChange={(event) => setFlatpakCommit(event.target.value.trim())} placeholder="Pin an exact 64-character commit" /></label></div><label>Repository descriptor URL (optional)<input type="url" value={flatpakRepositoryURL} onChange={(event) => setFlatpakRepositoryURL(event.target.value.trim())} placeholder="https://updates.example.com/factory.flatpakrepo" /></label></> : <><label>HTTPS artifact URL<input value={artifactUrl} onChange={(event) => setArtifactURL(event.target.value.trim())} placeholder="https://releases.example.com/device-v2.bundle" /></label><div className="formGrid"><label>Artifact size in bytes (optional)<input type="number" min="0" value={artifactSize} onChange={(event) => setArtifactSize(event.target.value)} /></label><label>Allowed current versions (optional)<input value={compatibleFrom} onChange={(event) => setCompatibleFrom(event.target.value)} placeholder="1.4.0, 1.4.1" /></label></div><label>SHA-256 digest<input value={digest} onChange={(event) => setDigest(event.target.value.trim())} placeholder="64 hexadecimal characters" /></label><div className="formGrid"><label>Signing key ID<input value={signingKeyID} onChange={(event) => setSigningKeyID(event.target.value.trim())} placeholder="production-2026" /></label><label>Detached Ed25519 signature<input value={signature} onChange={(event) => setSignature(event.target.value.trim())} placeholder="Base64 signature of the lowercase digest" /></label></div></>}<fieldset className="targetPicker"><legend>Compatible target devices</legend>{data.devices.filter((device) => isFlatpak || !architecture || !device.architecture || normalizeArchitecture(device.architecture) === architecture).map((device) => { const ready = Boolean(selectedAdapter && device.capabilities?.includes(`ota:${selectedAdapter}`)); return <label key={device.id} className={!ready ? "disabledTarget" : ""}><input type="checkbox" disabled={!ready} checked={targets.includes(device.id)} onChange={(event) => setTargets(event.target.checked ? [...targets, device.id] : targets.filter((id) => id !== device.id))} /><span><strong>{device.display_name}</strong><small>{device.presence} - {ready ? `${selectedAdapter} ready` : `${selectedAdapter || "adapter"} is not installed`}</small></span></label>; })}</fieldset>{error && <div className="formError"><AlertTriangle size={17} />{error}</div>}<div className="modalActions"><button className="button secondary" onClick={() => setShowCreate(false)}>Cancel</button><button className="button primary" disabled={saving || !capable.length} onClick={create}>{saving ? <LoaderCircle className="spin" size={16} /> : <CloudCog size={16} />} Queue pilot update</button></div></div></Modal>}
+    {showCreate && <Modal title="Create update campaign" onClose={() => setShowCreate(false)}><div className="modalForm otaForm"><div className="formGrid"><label>Campaign name<input value={name} onChange={(event) => setName(event.target.value)} placeholder={isFlatpak ? "Kiosk application 1.4" : "August security release"} /></label><label>Release version<input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="2026.08.1" /></label><label>Update mechanism<select value={adapter} onChange={(event) => { setAdapter(event.target.value); setTargets([]); }}><option value="mender">Mender</option><option value="rauc">RAUC</option><option value="ostree">OSTree</option><option value="swupdate">SWUpdate</option><option value="flatpak">Flatpak application</option><option value="custom">Installed plugin</option></select></label><label>Pilot group (%)<div className="rangeField"><input type="range" min="1" max="100" value={canary} onChange={(event) => setCanary(Number(event.target.value))} /><output>{canary}%</output></div><span className="formHint">This percentage updates first. Continue only after those devices succeed.</span></label>{adapter === "custom" && <label>Plugin name<input value={customAdapter} onChange={(event) => { setCustomAdapter(event.target.value); setTargets([]); }} placeholder="my-updater" /></label>}{!isFlatpak && <><label>Device product<input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="embedded-linux" /></label><label>Architecture<select value={architecture} onChange={(event) => { setArchitecture(event.target.value); setTargets([]); }}><option value="arm64">64-bit ARM (arm64 / aarch64)</option><option value="armv7">32-bit ARM (armv7 / armhf)</option><option value="amd64">x86-64 (amd64)</option></select></label></>}</div>{isFlatpak ? <><div className="formSectionLabel">Flatpak application</div><label>Application reference<input value={flatpakRef} onChange={(event) => setFlatpakRef(event.target.value.trim())} placeholder="com.example.Kiosk" /></label><div className="formGrid"><label>Remote name<input value={flatpakRemote} onChange={(event) => setFlatpakRemote(event.target.value.trim())} placeholder="factory" /></label><label>OSTree commit (optional)<input value={flatpakCommit} onChange={(event) => setFlatpakCommit(event.target.value.trim())} placeholder="Pin an exact 64-character commit" /></label></div><label>Repository descriptor URL (optional)<input type="url" value={flatpakRepositoryURL} onChange={(event) => setFlatpakRepositoryURL(event.target.value.trim())} placeholder="https://updates.example.com/factory.flatpakrepo" /></label></> : <>{isOSTree && <><div className="formSectionLabel">OSTree source</div><label>Delivery method<select value={ostreeSource} onChange={(event) => setOSTreeSource(event.target.value as "repository" | "delta")}><option value="repository">Online repository</option><option value="delta">Signed offline static delta</option></select></label><div className="formGrid">{isOSTreeRepository && <label>Preconfigured remote<input value={ostreeRemote} onChange={(event) => setOSTreeRemote(event.target.value.trim())} placeholder="origin" /></label>}{isOSTreeRepository && <label>Branch / ref<input value={ostreeRef} onChange={(event) => setOSTreeRef(event.target.value.trim())} placeholder="soulroom/arm64/stable" /></label>}<label>Target commit<input value={ostreeCommit} onChange={(event) => setOSTreeCommit(event.target.value.trim())} placeholder="Exact 64-character OSTree checksum" /></label><label>Deployment OS name (optional)<input value={ostreeOS} onChange={(event) => setOSTreeOS(event.target.value.trim())} placeholder="Use only for multi-stateroot devices" /></label></div>{isOSTreeRepository && <span className="formHint">The remote must already be configured on the device with trusted GPG keys. The release signature covers the lowercase target commit.</span>}</>}{!isOSTreeRepository && <label>HTTPS artifact URL<input value={artifactUrl} onChange={(event) => setArtifactURL(event.target.value.trim())} placeholder="https://releases.example.com/device-v2.bundle" /></label>}<div className="formGrid">{!isOSTreeRepository && <label>Artifact size in bytes (optional)<input type="number" min="0" value={artifactSize} onChange={(event) => setArtifactSize(event.target.value)} /></label>}<label>Allowed current versions (optional)<input value={compatibleFrom} onChange={(event) => setCompatibleFrom(event.target.value)} placeholder={isOSTree ? "Current OSTree commit checksums" : "1.4.0, 1.4.1"} /></label></div>{!isOSTreeRepository && <label>SHA-256 artifact digest<input value={digest} onChange={(event) => setDigest(event.target.value.trim())} placeholder="64 hexadecimal characters" /></label>}<div className="formGrid"><label>Signing key ID<input value={signingKeyID} onChange={(event) => setSigningKeyID(event.target.value.trim())} placeholder="production-2026" /></label><label>Detached Ed25519 signature<input value={signature} onChange={(event) => setSignature(event.target.value.trim())} placeholder={isOSTreeRepository ? "Base64 signature of the lowercase target commit" : "Base64 signature of the lowercase digest"} /></label></div></>}<fieldset className="targetPicker"><legend>Compatible target devices</legend>{data.devices.filter((device) => isFlatpak || !architecture || !device.architecture || normalizeArchitecture(device.architecture) === architecture).map((device) => { const ready = Boolean(selectedAdapter && device.capabilities?.includes(`ota:${selectedAdapter}`)); return <label key={device.id} className={!ready ? "disabledTarget" : ""}><input type="checkbox" disabled={!ready} checked={targets.includes(device.id)} onChange={(event) => setTargets(event.target.checked ? [...targets, device.id] : targets.filter((id) => id !== device.id))} /><span><strong>{device.display_name}</strong><small>{device.presence} - {ready ? `${selectedAdapter} ready` : `${selectedAdapter || "adapter"} is not installed`}</small></span></label>; })}</fieldset>{error && <div className="formError"><AlertTriangle size={17} />{error}</div>}<div className="modalActions"><button className="button secondary" onClick={() => setShowCreate(false)}>Cancel</button><button className="button primary" disabled={saving || !capable.length} onClick={create}>{saving ? <LoaderCircle className="spin" size={16} /> : <CloudCog size={16} />} Queue pilot update</button></div></div></Modal>}
   </>;
 }
 
@@ -818,7 +912,7 @@ function Health({ data }: { data: FleetData }) {
   React.useEffect(() => {
     if (!deviceId && data.devices[0]) setDeviceId(data.devices[0].id);
   }, [data.devices, deviceId]);
-  if (data.devices.length === 0) return <EmptySection icon={<Activity size={28} />} title="No device health data" text="Start an enrolled agent to populate the system health charts." />;
+  if (data.devices.length === 0) return <EmptySection icon={<Activity size={28} />} title="No device health data" text="Start an enrolled agent to populate the device health charts." />;
   const device = data.devices.find((item) => item.id === deviceId) || data.devices[0];
   const metrics = data.metrics.filter((metric) => metric.device_id === device.id);
   const deviceData = { ...data, metrics };
@@ -837,7 +931,7 @@ function Health({ data }: { data: FleetData }) {
 }
 
 function OnPrem({ data, onData }: { data: FleetData; onData: (data: FleetData) => void }) {
-  const [tab, setTab] = React.useState<"settings" | "infrastructure">("settings");
+  const [tab, setTab] = React.useState<"settings" | "shellhub" | "infrastructure">("settings");
   const [draft, setDraft] = React.useState<PlatformSettings>(data.settings);
   const [dirty, setDirty] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -850,7 +944,7 @@ function OnPrem({ data, onData }: { data: FleetData; onData: (data: FleetData) =
     setSaving(true); setError(""); setMessage("");
     try {
       const response = await updatePlatformSettings(data.membership, draft);
-      onData({ ...data, settings: response.settings, settingsSource: response.source, canManageSettings: response.can_manage, organization: { ...data.organization, name: response.settings.organization_name } });
+      onData({ ...data, settings: response.settings, settingsSource: response.source, canManageSettings: response.can_manage, organization: { ...data.organization, name: response.settings.organization_name }, platform: { ...data.platform, remote_access_url: response.settings.shellhub_url || "", remote_access_configured: Boolean(response.settings.shellhub_url), remote_access_ssh_port: response.settings.shellhub_ssh_port } });
       setDraft(response.settings); setDirty(false); setMessage("Platform settings saved and active.");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Platform settings could not be saved."); }
     finally { setSaving(false); }
@@ -859,13 +953,13 @@ function OnPrem({ data, onData }: { data: FleetData; onData: (data: FleetData) =
     setSaving(true); setError(""); setMessage("");
     try {
       const response = await resetPlatformSettings(data.membership);
-      onData({ ...data, settings: response.settings, settingsSource: response.source, canManageSettings: response.can_manage, organization: { ...data.organization, name: response.settings.organization_name } });
+      onData({ ...data, settings: response.settings, settingsSource: response.source, canManageSettings: response.can_manage, organization: { ...data.organization, name: response.settings.organization_name }, platform: { ...data.platform, remote_access_url: response.settings.shellhub_url || "", remote_access_configured: Boolean(response.settings.shellhub_url), remote_access_ssh_port: response.settings.shellhub_ssh_port } });
       setDraft(response.settings); setDirty(false); setShowReset(false); setMessage("Operational defaults restored from the deployment configuration.");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Platform settings could not be reset."); }
     finally { setSaving(false); }
   }
   return <>
-    <Toolbar><div className="segmented" aria-label="Platform administration view"><button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}><Settings2 size={15} /> Platform settings</button><button className={tab === "infrastructure" ? "active" : ""} onClick={() => setTab("infrastructure")}><ServerCog size={15} /> Infrastructure</button></div><Badge value={data.settingsSource === "platform" ? "UI managed" : "deployment defaults"} /></Toolbar>
+    <Toolbar><div className="segmented" aria-label="Platform administration view"><button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}><Settings2 size={15} /> Platform settings</button><button className={tab === "shellhub" ? "active" : ""} onClick={() => setTab("shellhub")}><TerminalSquare size={15} /> ShellHub</button><button className={tab === "infrastructure" ? "active" : ""} onClick={() => setTab("infrastructure")}><ServerCog size={15} /> Infrastructure</button></div><Badge value={data.settingsSource === "platform" ? "UI managed" : "deployment defaults"} /></Toolbar>
     {tab === "settings" ? <>
       <div className="settingsSummary"><div className="settingsSummaryIcon"><SlidersHorizontal size={22} /></div><div><strong>Organization-level configuration</strong><p>These values take effect without rebuilding containers. Deployment credentials, keys, storage, and network listeners remain protected outside the browser.</p></div><span>{data.settingsSource === "platform" && data.settings.updated_at ? `Updated ${relativeTime(data.settings.updated_at)}` : "Using deployment defaults"}</span></div>
       {message && <div className="inlineNotice successNotice"><Check size={17} />{message}</div>}
@@ -874,6 +968,13 @@ function OnPrem({ data, onData }: { data: FleetData; onData: (data: FleetData) =
       <Panel title="Fleet behavior" subtitle="Defaults used by monitoring and operator workflows"><div className="settingsGrid"><label>Mark device offline after<div className="numberInput"><input type="number" min="2" max="1440" value={draft.device_offline_minutes} disabled={!data.canManageSettings} onChange={(event) => update({ device_offline_minutes: Number(event.target.value) })} /><span>minutes</span></div><small>Heartbeat age used by device state, alerts, and fleet availability.</small></label><label>Default telemetry view<select value={draft.default_telemetry_window} disabled={!data.canManageSettings} onChange={(event) => update({ default_telemetry_window: event.target.value as PlatformSettings["default_telemetry_window"] })}><option value="15m">Last 15 minutes</option><option value="1h">Last hour</option><option value="24h">Last 24 hours</option></select><small>The initial window when an operator opens Telemetry.</small></label></div></Panel>
       <Panel title="Operational defaults" subtitle="Applied when operators create a rollout, token, or job"><div className="settingsGrid threeColumns"><label>Pilot rollout group<div className="rangeField settingsRange"><input type="range" min="1" max="100" value={draft.default_ota_pilot_percent} disabled={!data.canManageSettings} onChange={(event) => update({ default_ota_pilot_percent: Number(event.target.value) })} /><output>{draft.default_ota_pilot_percent}%</output></div><small>The first portion of compatible targets updated before approval.</small></label><label>Enrollment token lifetime<div className="numberInput"><input type="number" min="1" max="720" value={draft.default_enrollment_ttl_hours} disabled={!data.canManageSettings} onChange={(event) => update({ default_enrollment_ttl_hours: Number(event.target.value) })} /><span>hours</span></div><small>New one-time enrollment tokens use this lifetime.</small></label><label>Job expiry<div className="numberInput"><input type="number" min="5" max="10080" value={draft.default_job_ttl_minutes} disabled={!data.canManageSettings} onChange={(event) => update({ default_job_ttl_minutes: Number(event.target.value) })} /><span>minutes</span></div><small>Queued jobs expire if a device does not collect them in time.</small></label></div></Panel>
       <div className="settingsActions"><div><strong>{dirty ? "Unsaved changes" : "Configuration is up to date"}</strong><span>{data.canManageSettings ? "Changes are scoped to this organization and recorded in the audit log." : "Only an organization owner can change these settings."}</span></div>{data.canManageSettings && <div><button className="button secondary" disabled={saving || data.settingsSource !== "platform"} onClick={() => setShowReset(true)}><RefreshCw size={16} /> Restore defaults</button><button className="button primary" disabled={saving || !dirty} onClick={save}>{saving ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />} Save changes</button></div>}</div>
+    </> : tab === "shellhub" ? <>
+      <div className="settingsSummary"><div className="settingsSummaryIcon"><TerminalSquare size={22} /></div><div><strong>ShellHub remote access</strong><p>Configure the embedded console address without rebuilding the platform. The bundled service remains private to this installation.</p></div><div><Badge value={data.platform.remote_access_managed ? "bundled" : "external"} /></div></div>
+      {message && <div className="inlineNotice successNotice"><Check size={17} />{message}</div>}
+      {error && <div className="inlineError"><AlertTriangle size={17} />{error}<button onClick={() => setError("")}><X size={15} /></button></div>}
+      <Panel title="Console connection" subtitle="Used by the Remote access page and generated SSH commands"><div className="settingsGrid"><label>ShellHub portal URL<input type="url" value={draft.shellhub_url || ""} disabled={!data.canManageSettings} onChange={(event) => update({ shellhub_url: event.target.value })} placeholder="http://localhost:8088" /><small>For bundled ShellHub, the hostname always follows the address used to open Soul Room. Configure only the protocol and web port here.</small></label><label>ShellHub SSH port<div className="numberInput"><input type="number" min="1" max="65535" value={draft.shellhub_ssh_port} disabled={!data.canManageSettings} onChange={(event) => update({ shellhub_ssh_port: Number(event.target.value) })} /><span>TCP</span></div><small>This is an SSH protocol port for terminal clients, not a URL that opens in a browser.</small></label></div></Panel>
+      <div className="shellHubSettingPreview"><div><TerminalSquare size={19} /><span><strong>Browser console</strong><code>{resolveShellHubURL(draft.shellhub_url || "", window.location.href, data.platform.remote_access_managed) || "Not configured"}</code></span></div><Badge value={draft.shellhub_url ? "configured" : "disabled"} /></div>
+      <div className="settingsActions"><div><strong>{dirty ? "Unsaved changes" : "Remote access is up to date"}</strong><span>{data.canManageSettings ? "Changes apply immediately and are recorded in the audit log." : "Only an organization owner can change these settings."}</span></div>{data.canManageSettings && <div><button className="button secondary" disabled={saving || data.settingsSource !== "platform"} onClick={() => setShowReset(true)}><RefreshCw size={16} /> Restore defaults</button><button className="button primary" disabled={saving || !dirty} onClick={save}>{saving ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />} Save changes</button></div>}</div>
     </> : <>
       <div className="adminSummary"><div><span className="overline">Installation</span><strong>Soul Room Local</strong><p>Single-node Docker Compose - Version 0.1.0</p></div><Badge value="running" /></div>
       <Panel title="Environment-managed configuration" subtitle="Infrastructure values are read-only here because changing them may require DNS, certificates, secrets, or a service restart"><div className="environmentSettings">{data.infrastructureSettings.map((setting) => <div key={setting.key}><span className="environmentIcon"><LockKeyhole size={16} /></span><span><strong>{setting.label}</strong><code>{setting.value}</code></span><Badge value={setting.restart_required ? "restart required" : "environment"} /></div>)}</div></Panel>
@@ -900,6 +1001,7 @@ function Badge({ value }: { value: string }) { const tone = badgeTone(value); re
 function SimpleTable({ headers, rows, empty = "Nothing to show." }: { headers: string[]; rows: React.ReactNode[][]; empty?: string }) { return <div className="tableWrap"><table><thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table>{rows.length === 0 && <EmptyState text={empty} />}</div>; }
 
 function EmptyState({ text }: { text: string }) { return <div className="emptyState"><FileClock size={22} /><span>{text}</span></div>; }
+function PageLoading({ label }: { label: string }) { return <div className="pageLoading"><LoaderCircle className="spin" size={22} /><span>{label}</span></div>; }
 
 function EmptyFleet({ onEnroll }: { onEnroll: () => void }) {
   return <section className="emptyFleet"><div className="emptyFleetVisual"><RadioTower size={34} /><span className="signal one" /><span className="signal two" /></div><span className="overline">Ready for a real device</span><h2>Your fleet is empty</h2><p>Create a one-time token, enroll an embedded Linux device, and its actual inventory and telemetry will populate this workspace.</p><button className="button successButton" onClick={onEnroll}><Plus size={16} /> Enroll first device</button><div className="emptyFlow"><span><strong>1</strong> Create token</span><ChevronRight size={15} /><span><strong>2</strong> Start agent</span><ChevronRight size={15} /><span><strong>3</strong> Watch live data</span></div></section>;
@@ -975,24 +1077,6 @@ function CapacityChart({ memory, storage }: { memory: number; storage: number })
 }
 
 const chartTooltipStyle: React.CSSProperties = { border: "1px solid #d5e0de", borderRadius: 6, boxShadow: "0 10px 28px rgba(31, 54, 51, .12)", color: "#203431", fontSize: 12 };
-
-const packageBrands: { test: RegExp; icon: SimpleIcon }[] = [
-  { test: /^nginx/i, icon: siNginx }, { test: /^(apache2|httpd)/i, icon: siApache },
-  { test: /^mariadb/i, icon: siMariadb }, { test: /^mysql/i, icon: siMysql }, { test: /^(postgres|libpq)/i, icon: siPostgresql },
-  { test: /^mongo/i, icon: siMongodb }, { test: /^redis/i, icon: siRedis }, { test: /^rabbitmq/i, icon: siRabbitmq },
-  { test: /^(docker|containerd)/i, icon: siDocker }, { test: /^python/i, icon: siPython }, { test: /^git($|-)/i, icon: siGit },
-  { test: /^ubuntu/i, icon: siUbuntu }, { test: /^flatpak/i, icon: siFlatpak }, { test: /^(openssl|libssl)/i, icon: siOpenssl },
-  { test: /^(curl|libcurl)/i, icon: siCurl }, { test: /^(nodejs|node-|npm$)/i, icon: siNodedotjs }, { test: /^anydesk/i, icon: siAnydesk },
-  { test: /^(bash|dash$)/i, icon: siGnubash }, { test: /^(linux|kernel)/i, icon: siLinux }, { test: /^trivy/i, icon: siTrivy },
-];
-
-function PackageBrandIcon({ name }: { name: string }) {
-  const brand = packageBrands.find((entry) => entry.test.test(name))?.icon;
-  if (brand) return <span className="packageBrand" title={brand.title} style={{ color: `#${brand.hex}` }}><svg viewBox="0 0 24 24" role="img" aria-label={`${brand.title} logo`}><path fill="currentColor" d={brand.path} /></svg></span>;
-  const initials = name.split(/[-_.]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "PK";
-  const tone = Array.from(name).reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 5;
-  return <span className={`packageMonogram tone${tone}`} title="System package without an official project logo">{initials}</span>;
-}
 
 function pageExportData(page: PageId, data: FleetData) {
   const shared = { generated_at: new Date().toISOString(), page, organization: data.organization };

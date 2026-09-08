@@ -20,6 +20,8 @@
   compatibility, reboot recovery, health confirmation, commit, and rollback.
 * Built-in Mender, RAUC, OSTree, SWUpdate, and Flatpak command adapters plus a
   root-owned executable plugin contract for product-specific update systems.
+  OSTree supports signed offline static deltas and exact-commit pulls from
+  preconfigured HTTPS/GPG-verified remotes, followed by exact boot confirmation.
 * Gateway downstream model, simulator connector, and read-only Modbus TCP
   connector.
 * CLI commands for status, identity, enrollment, config validation, telemetry,

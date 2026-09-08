@@ -14,6 +14,8 @@ var (
 	flatpakRefPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{2,199}$`)
 	flatpakRemotePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 	flatpakCommitPattern = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
+	ostreeNamePattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+	ostreeRefPattern     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$`)
 )
 
 type Campaign struct {
@@ -35,6 +37,10 @@ type Campaign struct {
 	FlatpakRemote        string    `json:"flatpak_remote,omitempty"`
 	FlatpakCommit        string    `json:"flatpak_commit,omitempty"`
 	FlatpakRepositoryURL string    `json:"flatpak_repository_url,omitempty"`
+	OSTreeRemote         string    `json:"ostree_remote,omitempty"`
+	OSTreeRef            string    `json:"ostree_ref,omitempty"`
+	OSTreeCommit         string    `json:"ostree_commit,omitempty"`
+	OSTreeOS             string    `json:"ostree_os,omitempty"`
 	TargetIDs            []string  `json:"target_device_ids"`
 	CanaryPercent        int       `json:"canary_percent"`
 	CreatedBy            string    `json:"created_by,omitempty"`
@@ -64,8 +70,8 @@ func ValidateMetadata(c Campaign) error {
 		}
 		return validateRollout(c)
 	}
-	if c.ArtifactURL == "" || c.Digest == "" || c.Signature == "" || c.SigningKeyID == "" {
-		return errors.New("OTA metadata requires an artifact URL, version, digest, detached signature, and signing key ID")
+	if c.Digest == "" || c.Signature == "" || c.SigningKeyID == "" {
+		return errors.New("OTA metadata requires a digest, detached signature, and signing key ID")
 	}
 	if !supportedArchitecture(c.Architecture) {
 		return errors.New("OTA architecture must be arm64/aarch64, armv7, or amd64")
@@ -73,9 +79,15 @@ func ValidateMetadata(c Campaign) error {
 	if !regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`).MatchString(c.Adapter) {
 		return errors.New("update adapter name is invalid")
 	}
-	parsed, err := url.Parse(c.ArtifactURL)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-		return errors.New("OTA artifact URL must use HTTPS")
+	if c.Product == "" {
+		return errors.New("OTA product is required")
+	}
+	if c.Adapter == "ostree" {
+		if err := validateOSTree(c); err != nil {
+			return err
+		}
+	} else if err := validateArtifactURL(c.ArtifactURL); err != nil {
+		return err
 	}
 	digest, err := hex.DecodeString(c.Digest)
 	if err != nil || len(digest) != 32 {
@@ -95,6 +107,41 @@ func ValidateMetadata(c Campaign) error {
 		return errors.New("OTA signature must be a base64 Ed25519 signature")
 	}
 	return validateRollout(c)
+}
+
+func validateOSTree(c Campaign) error {
+	commit, err := hex.DecodeString(c.OSTreeCommit)
+	if err != nil || len(commit) != 32 {
+		return errors.New("OSTree target commit must be a 64-character SHA-256 checksum")
+	}
+	if c.OSTreeOS != "" && !ostreeNamePattern.MatchString(c.OSTreeOS) {
+		return errors.New("OSTree deployment OS name is invalid")
+	}
+	repositoryMode := c.OSTreeRemote != "" || c.OSTreeRef != ""
+	if !repositoryMode {
+		return validateArtifactURL(c.ArtifactURL)
+	}
+	if c.ArtifactURL != "" {
+		return errors.New("OSTree campaign must use either a repository or a static-delta artifact, not both")
+	}
+	if !ostreeNamePattern.MatchString(c.OSTreeRemote) || !ostreeRefPattern.MatchString(c.OSTreeRef) {
+		return errors.New("OSTree repository campaign requires a valid preconfigured remote and ref")
+	}
+	if !strings.EqualFold(c.Digest, c.OSTreeCommit) {
+		return errors.New("OSTree repository digest must equal the pinned target commit")
+	}
+	if c.ArtifactSize != 0 {
+		return errors.New("OSTree repository campaign cannot include an artifact size")
+	}
+	return nil
+}
+
+func validateArtifactURL(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return errors.New("OTA artifact URL must use HTTPS")
+	}
+	return nil
 }
 
 func supportedArchitecture(value string) bool {

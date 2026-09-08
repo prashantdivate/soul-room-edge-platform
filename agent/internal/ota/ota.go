@@ -2,6 +2,7 @@ package ota
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,8 @@ import (
 )
 
 var adapterNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+var ostreeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+var ostreeRefPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$`)
 
 var ErrRebootPending = errors.New("OTA reboot is pending")
 
@@ -33,6 +36,10 @@ type Request struct {
 	FlatpakRemote  string   `json:"flatpak_remote,omitempty"`
 	FlatpakCommit  string   `json:"flatpak_commit,omitempty"`
 	RepositoryURL  string   `json:"repository_url,omitempty"`
+	OSTreeRemote   string   `json:"ostree_remote,omitempty"`
+	OSTreeRef      string   `json:"ostree_ref,omitempty"`
+	OSTreeCommit   string   `json:"ostree_commit,omitempty"`
+	OSTreeOS       string   `json:"ostree_os,omitempty"`
 }
 
 type Status struct {
@@ -106,8 +113,8 @@ func ValidateRequest(cfg Config, request Request) error {
 		return errors.New("OTA request requires an update ID, version, and valid adapter")
 	}
 	if request.Adapter != "flatpak" {
-		if request.ArtifactURL == "" || request.Digest == "" || request.Signature == "" || request.SigningKeyID == "" {
-			return errors.New("OS OTA requires an artifact URL, SHA-256 digest, detached signature, and signing key ID")
+		if request.Digest == "" || request.Signature == "" || request.SigningKeyID == "" {
+			return errors.New("OS OTA requires a SHA-256 digest, detached signature, and signing key ID")
 		}
 		if CanonicalArchitecture(request.Architecture) != CanonicalArchitecture(runtime.GOARCH) {
 			return fmt.Errorf("artifact architecture %q does not match device architecture %q", request.Architecture, runtime.GOARCH)
@@ -118,11 +125,49 @@ func ValidateRequest(cfg Config, request Request) error {
 		if request.Product != cfg.Product {
 			return fmt.Errorf("artifact product %q does not match configured product %q", request.Product, cfg.Product)
 		}
+		if request.Adapter == "ostree" {
+			if err := validateOSTreeRequest(request); err != nil {
+				return err
+			}
+		} else if request.ArtifactURL == "" {
+			return errors.New("OS OTA requires an artifact URL")
+		}
 	}
 	if request.ArtifactSize < 0 || (cfg.MaxArtifactBytes > 0 && request.ArtifactSize > cfg.MaxArtifactBytes) {
 		return errors.New("artifact exceeds the configured size limit")
 	}
 	return nil
+}
+
+func validateOSTreeRequest(request Request) error {
+	commit, err := hex.DecodeString(request.OSTreeCommit)
+	if err != nil || len(commit) != 32 {
+		return errors.New("OSTree target commit must be a 64-character SHA-256 checksum")
+	}
+	if request.OSTreeOS != "" && !ostreeNamePattern.MatchString(request.OSTreeOS) {
+		return errors.New("OSTree deployment OS name is invalid")
+	}
+	repositoryMode := request.OSTreeRemote != "" || request.OSTreeRef != ""
+	if !repositoryMode {
+		if request.ArtifactURL == "" {
+			return errors.New("OSTree offline updates require a signed static-delta artifact URL")
+		}
+		return nil
+	}
+	if request.ArtifactURL != "" {
+		return errors.New("OSTree update must use either a repository or a static-delta artifact, not both")
+	}
+	if !ostreeNamePattern.MatchString(request.OSTreeRemote) || !ostreeRefPattern.MatchString(request.OSTreeRef) {
+		return errors.New("OSTree repository updates require a valid preconfigured remote and ref")
+	}
+	if !strings.EqualFold(request.Digest, request.OSTreeCommit) {
+		return errors.New("OSTree repository digest must equal the pinned target commit")
+	}
+	return nil
+}
+
+func usesOSTreeRepository(request Request) bool {
+	return request.Adapter == "ostree" && request.OSTreeRemote != ""
 }
 
 func DiscoverCapabilities(pluginDir string, runner Runner) []string {

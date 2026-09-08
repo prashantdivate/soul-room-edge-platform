@@ -13,7 +13,8 @@ Usage:
   ./platform.sh <command> [service]
 
 Commands:
-  up                 Build and start the complete platform
+  up                 Start the complete platform using local images
+  build              Build local images, then start the platform
   down               Stop the platform and preserve persistent data
   refresh            Rebuild and recreate from the current source
   restart            Restart existing containers without rebuilding
@@ -24,6 +25,7 @@ Commands:
 
 Examples:
   ./platform.sh up
+  ./platform.sh build
   ./platform.sh refresh
   ./platform.sh logs platform
 EOF
@@ -56,13 +58,20 @@ fi
 case "$command" in
   up)
     require_docker
-    compose up --build -d
+    compose up --remove-orphans -d
     compose ps
     echo "Soul Room is available at http://localhost:3080"
     ;;
+  build)
+    require_docker
+    compose build
+    compose up --remove-orphans -d
+    compose ps
+    echo "Soul Room images were built and the platform is available at http://localhost:3080"
+    ;;
   down)
     require_docker
-    compose down
+    compose down --remove-orphans
     echo "Soul Room stopped. Persistent volumes were preserved."
     ;;
   refresh)

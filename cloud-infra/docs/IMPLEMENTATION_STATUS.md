@@ -20,10 +20,18 @@
 * Compose service image can start `control-api`, `device-gateway`, or `worker`
   through per-service commands.
 * Pinned self-hosted ShellHub Community Edition stack, persistent signing keys
-  and database, tenant-device SSHID mapping, RBAC-gated launch, and audit event.
+  and database, tenant-device SSHID mapping, RBAC-gated embedded portal, and
+  audit event.
+* Lightweight local Compose topology: the combined platform binary and durable
+  JSON store avoid unused application PostgreSQL, MinIO, and Mailpit services;
+  ShellHub retains its required database and coordination services.
+* Permission-aware navigation and data loading, remembered expandable sidebar,
+  Ctrl/Cmd+K page search, and lazy-loaded fleet mapping.
 * Capability-gated OTA campaigns for Mender, RAUC, OSTree, SWUpdate, Flatpak,
   and device-provided adapter plugins, with pilot-first delivery, explicit
-  promotion, signed release metadata, and rebooting job state.
+  promotion, signed release metadata, and rebooting job state. OSTree campaigns
+  distinguish signed static deltas from pinned-commit repository pulls and pass
+  the remote, ref, commit, and optional deployment OS through the job contract.
 * Tenant-scoped platform settings with owner-only RBAC, validation, persistent
   UI overrides, deployment-default reset, audit events, and safe read-only
   infrastructure visibility. Settings drive presence, telemetry, OTA,

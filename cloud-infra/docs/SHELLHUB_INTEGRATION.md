@@ -29,9 +29,10 @@ Start the complete platform from `cloud-infra`:
 docker compose up --build -d
 ```
 
-Open `http://localhost:8088/setup`, create the ShellHub administrator, and
-create the first namespace. This intentional one-time setup avoids shipping a
-known ShellHub password. Record the namespace tenant ID.
+Open Soul Room and select **Operations > Remote access**. The ShellHub setup
+screen is embedded on that page; create the ShellHub administrator and first
+namespace there. This intentional one-time setup avoids shipping a known
+ShellHub password. Record the namespace tenant ID.
 
 For a physical device, configure the host address before starting Compose:
 
@@ -82,6 +83,13 @@ ssh -p 22222 linux-user@namespace.device@192.168.1.20
 
 Use public-key authentication and ShellHub firewall rules. Soul Room does not
 store Linux passwords or reusable SSH private keys.
+
+The administrator can change the console URL and generated SSH port under
+**Settings > Platform settings > ShellHub** without rebuilding containers. A
+bundled console hostname is always rewritten to the same interface used to open
+Soul Room, so LAN browsers never depend on a hardcoded host address. The portal
+uses the configured HTTP port, while `22222` is an SSH protocol port and is not
+a browser endpoint.
 
 ## Persistence And Reset
 

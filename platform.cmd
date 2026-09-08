@@ -17,6 +17,7 @@ if errorlevel 1 exit /b %errorlevel%
 pushd "%PLATFORM_DIR%" || exit /b 1
 
 if /I "%COMMAND%"=="up" goto :up
+if /I "%COMMAND%"=="build" goto :build
 if /I "%COMMAND%"=="down" goto :down
 if /I "%COMMAND%"=="refresh" goto :refresh
 if /I "%COMMAND%"=="restart" goto :restart
@@ -30,13 +31,20 @@ call :help
 exit /b 2
 
 :up
-docker compose up --build -d || goto :failed
+docker compose up --remove-orphans -d || goto :failed
 docker compose ps || goto :failed
 echo Soul Room is available at http://localhost:3080
 goto :success
 
+:build
+docker compose build || goto :failed
+docker compose up --remove-orphans -d || goto :failed
+docker compose ps || goto :failed
+echo Soul Room images were built and the platform is available at http://localhost:3080
+goto :success
+
 :down
-docker compose down || goto :failed
+docker compose down --remove-orphans || goto :failed
 echo Soul Room stopped. Persistent volumes were preserved.
 goto :success
 
@@ -110,7 +118,8 @@ echo Usage:
 echo   platform.cmd ^<command^> [service]
 echo.
 echo Commands:
-echo   up                 Build and start the complete platform
+echo   up                 Start the complete platform using local images
+echo   build              Build local images, then start the platform
 echo   down               Stop the platform and preserve persistent data
 echo   refresh            Rebuild and recreate from the current source
 echo   restart            Restart existing containers without rebuilding
@@ -121,6 +130,7 @@ echo   help               Show this help
 echo.
 echo Examples:
 echo   platform.cmd up
+echo   platform.cmd build
 echo   platform.cmd refresh
 echo   platform.cmd logs platform
 exit /b 0

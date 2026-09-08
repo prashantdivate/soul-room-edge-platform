@@ -10,6 +10,8 @@ func validSettings() model.PlatformSettings {
 	return model.PlatformSettings{
 		OrganizationName:          "Acme Devices",
 		CompanyDomain:             "devices.example.com",
+		ShellHubURL:               "https://shell.example.com",
+		ShellHubSSHPort:           22,
 		DeviceOfflineMinutes:      5,
 		DefaultTelemetryWindow:    "1h",
 		DefaultOTAPilotPercent:    10,
@@ -35,6 +37,8 @@ func TestValidateRejectsUnsafeRanges(t *testing.T) {
 		{"token lifetime", func(value *model.PlatformSettings) { value.DefaultEnrollmentTTLHours = 0 }},
 		{"job expiry", func(value *model.PlatformSettings) { value.DefaultJobTTLMinutes = 2 }},
 		{"company domain", func(value *model.PlatformSettings) { value.CompanyDomain = "https://example.com/path" }},
+		{"ShellHub URL", func(value *model.PlatformSettings) { value.ShellHubURL = "javascript:alert(1)" }},
+		{"ShellHub SSH port", func(value *model.PlatformSettings) { value.ShellHubSSHPort = 70000 }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

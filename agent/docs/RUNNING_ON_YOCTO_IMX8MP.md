@@ -19,36 +19,23 @@ Runtime paths used by the service:
 /run/edge-agent
 ```
 
-Build the agent for ARM64:
-
-```cmd
-set GOOS=linux
-set GOARCH=arm64
-set CGO_ENABLED=0
-go build -o build/edge-agent ./cmd/edge-agent
-```
+For a quick device test, build the same ARM64 release bundle used by Ubuntu:
 
 ```bash
-cd agent
-GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o build/edge-agent ./cmd/edge-agent
-GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o build/edge-agentctl ./cmd/edge-agentctl
+docker build --target embedded-linux-arm64 --output type=local,dest=dist/embedded-linux-arm64 agent
 ```
 
-Install on the target:
+Copy that bundle and the CA downloaded from **Enrollment** to the target, then
+use the same installer as every other systemd-based Linux device:
 
 ```bash
-install -m 0755 edge-agent /usr/bin/edge-agent
-install -m 0755 edge-agentctl /usr/bin/edge-agentctl
-install -d -m 0750 /etc/edge-agent /var/lib/edge-agent /var/lib/edge-agent/identity /run/edge-agent
-install -m 0640 config.yaml /etc/edge-agent/config.yaml
+sudo sh install.sh --endpoint https://SOUL_ROOM_HOST:8443 --ca ./ca.pem --token ONE_TIME_TOKEN --name DEVICE_NAME
 ```
 
-Use `packaging/systemd/edge-agent.service` as the systemd unit. Then:
+Then verify:
 
 ```bash
-systemctl daemon-reload
-systemctl enable --now edge-agent
-journalctl -u edge-agent -f
+sudo edge-agentctl -config /etc/edge-agent/config.yaml status
 ```
 
 For Yocto integration, use `packaging/yocto/edge-agent_0.1.0.bb` as the

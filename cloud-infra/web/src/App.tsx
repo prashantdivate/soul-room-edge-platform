@@ -68,8 +68,6 @@ import {
   CartesianGrid,
   Cell,
   LabelList,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -244,6 +242,7 @@ export default function App() {
   const [exporting, setExporting] = React.useState(false);
   const pageCanvasRef = React.useRef<HTMLDivElement>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const searchWrapRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -261,6 +260,14 @@ export default function App() {
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+
+  React.useEffect(() => {
+    const closeOutsideSearch = (event: PointerEvent) => {
+      if (!searchWrapRef.current?.contains(event.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutsideSearch);
+    return () => document.removeEventListener("pointerdown", closeOutsideSearch);
   }, []);
 
   const refresh = React.useCallback(async (activeMembership: Membership) => {
@@ -283,6 +290,7 @@ export default function App() {
 
   React.useEffect(() => {
     sessionStorage.setItem(pageStorageKey, page);
+    setSearchOpen(false);
   }, [page]);
 
   React.useEffect(() => {
@@ -368,7 +376,7 @@ export default function App() {
             <strong>Production</strong>
           </div>
           <div className="topbarRight">
-            <div className="globalSearchWrap">
+            <div className="globalSearchWrap" ref={searchWrapRef}>
               <label className="globalSearch">
                 <Search size={17} />
                 <input ref={searchInputRef} value={search} onFocus={() => setSearchOpen(true)} onChange={(event) => { setSearch(event.target.value); setSearchOpen(true); }} placeholder="Search or jump" aria-label="Search records and pages" aria-keyshortcuts="Control+K Meta+K" />
@@ -822,6 +830,23 @@ function Profiles({ data }: { data: FleetData }) {
 
 type PackageAdvisory = { name: string; installed_version: string; fixed_version?: string; highest_severity: string; critical: number; high: number; medium: number; low: number; advisory_ids?: string[] };
 type VulnerabilityReport = { scanner: string; scanned_at: string; total: number; counts: Record<string, number>; packages: PackageAdvisory[] };
+export const trivySetupCommands = {
+  debian: [
+    "sudo apt-get install -y wget gnupg",
+    "wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg >/dev/null",
+    'echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee /etc/apt/sources.list.d/trivy.list',
+    "sudo apt-get update",
+    "sudo apt-get install -y trivy",
+  ].join("\n"),
+  verify: [
+    "trivy --version",
+    "sudo trivy rootfs --pkg-types os --scanners vuln --quiet /",
+  ].join("\n"),
+  restartAgent: [
+    "sudo systemctl restart edge-agent",
+    "sudo edge-agentctl -config /etc/edge-agent/config.yaml status",
+  ].join("\n"),
+} as const;
 
 function Applications({ data, onData }: { data: FleetData; onData: (data: FleetData) => void }) {
   const [tab, setTab] = React.useState<"packages" | "managed">("packages");
@@ -830,6 +855,7 @@ function Applications({ data, onData }: { data: FleetData; onData: (data: FleetD
   const [visible, setVisible] = React.useState(40);
   const [scanning, setScanning] = React.useState(false);
   const [scanError, setScanError] = React.useState("");
+  const [showScanInstructions, setShowScanInstructions] = React.useState(false);
   React.useEffect(() => { if (!deviceId && data.devices[0]) setDeviceId(data.devices[0].id); }, [data.devices, deviceId]);
   const device = data.devices.find((item) => item.id === deviceId) || data.devices[0];
   const packages = device ? (data.inventory[device.id]?.installed_packages || []) : [];
@@ -846,7 +872,7 @@ function Applications({ data, onData }: { data: FleetData; onData: (data: FleetD
     finally { setScanning(false); }
   }
   return <>
-    <Toolbar><div className="segmented"><button className={tab === "packages" ? "active" : ""} onClick={() => setTab("packages")}>Device packages</button><button className={tab === "managed" ? "active" : ""} onClick={() => setTab("managed")}>Managed apps</button></div>{tab === "packages" && <><label className="selectLabel">Device<select value={device?.id || ""} onChange={(event) => { setDeviceId(event.target.value); setVisible(40); }}>{data.devices.map((item) => <option value={item.id} key={item.id}>{item.display_name}</option>)}</select></label><button className="button warningButton" onClick={scan} disabled={!device || !canScan || scanning || device.presence !== "connected"}>{scanning ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />} Scan advisories</button></>}</Toolbar>
+    <Toolbar><div className="segmented"><button className={tab === "packages" ? "active" : ""} onClick={() => setTab("packages")}>Device packages</button><button className={tab === "managed" ? "active" : ""} onClick={() => setTab("managed")}>Managed apps</button></div>{tab === "packages" && <><label className="selectLabel">Device<select value={device?.id || ""} onChange={(event) => { setDeviceId(event.target.value); setVisible(40); }}>{data.devices.map((item) => <option value={item.id} key={item.id}>{item.display_name}</option>)}</select></label><button className="button secondary" onClick={() => setShowScanInstructions(true)}><FileText size={16} /> Instructions</button><button className="button warningButton" onClick={scan} disabled={!device || !canScan || scanning || device.presence !== "connected"}>{scanning ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />} Scan advisories</button></>}</Toolbar>
     {tab === "managed" ? <><Panel title="Managed applications" subtitle="Validated application records from the control plane"><SimpleTable headers={["Application", "Version", "Target", "State"]} rows={data.applications.map((app) => [recordText(app, "name"), recordText(app, "version"), recordText(app, "target"), <Badge value={recordText(app, "state")} />])} empty="No managed applications have been added." /></Panel><div className="policyFoot"><ShieldCheck size={18} /><span>Host networking, privileged containers, Docker socket mounts, and unrestricted host paths are rejected by default.</span></div></> : !device ? <EmptySection icon={<PackageSearch size={28} />} title="No package inventory" text="Enroll a device to see its installed software packages." /> : <>
       <section className="packageSummary"><Metric label="Installed packages" value={String(packages.length)} note={`Reported by ${device.display_name}`} tone="blue" icon={<Boxes size={18} />} /><Metric label="Critical advisories" value={report ? String(report.counts.CRITICAL || 0) : "—"} note={report ? "Review before production" : "Run a device scan"} tone={report?.counts.CRITICAL ? "red" : "green"} icon={<AlertTriangle size={18} />} /><Metric label="High advisories" value={report ? String(report.counts.HIGH || 0) : "—"} note={report ? "Evidence from Trivy" : "No scan result yet"} tone={report?.counts.HIGH ? "amber" : "green"} icon={<ShieldCheck size={18} />} /><Metric label="Last scan" value={report ? relativeTime(report.scanned_at) : "Not run"} note={report ? `${report.total} advisory matches` : canScan ? "Scanner is ready" : "Trivy not reported"} tone="cyan" icon={<Clock3 size={18} />} /></section>
       {!canScan && <div className="safetyBanner warning"><TriangleAlert size={20} /><div><strong>Package inventory is available; advisory scanning is not</strong><span>Install Trivy on this device and restart the Soul Room agent to enable evidence-backed CVE matching.</span></div></div>}
@@ -856,6 +882,18 @@ function Applications({ data, onData }: { data: FleetData; onData: (data: FleetD
       </Panel>
       <div className="policyFoot"><ShieldCheck size={18} /><span>Advisory matches are guidance, not proof of exploitability. Review package use, exposure, and available fixes before making a production decision.</span></div>
     </>}
+    {showScanInstructions && <Modal title="Advisory scan instructions" wide onClose={() => setShowScanInstructions(false)}><div className="advisoryInstructions">
+      <div className="advisoryIntro"><ShieldCheck size={22} /><div><strong>On-demand package vulnerability assessment</strong><span>Soul Room asks the selected device to run Trivy against its installed operating-system packages. It does not exploit the device or automatically change packages.</span></div><Badge value={canScan ? "scanner ready" : "setup required"} /></div>
+      <section><h3>Why it does not run automatically</h3><p>The first scan downloads a vulnerability database, and every scan uses device CPU, storage, network bandwidth, and I/O. Keeping it operator-triggered avoids unexpected load on constrained production devices.</p></section>
+      <ol className="advisorySteps">
+        <li><span>1</span><div><h3>Install Trivy on each Ubuntu or Debian device</h3><p>Run these commands on the managed device, not on the Soul Room server.</p><pre><code>{trivySetupCommands.debian}</code></pre><p className="instructionNote">For Yocto or another embedded Linux distribution, add the official Trivy binary for the device architecture to the image and place it in <code>/usr/bin</code> or <code>/usr/local/bin</code>. The scanner must be present in the agent service PATH.</p></div></li>
+        <li><span>2</span><div><h3>Verify the scanner on the device</h3><pre><code>{trivySetupCommands.verify}</code></pre><p>The first command confirms that the agent can find Trivy. The second performs the same class of OS-package scan manually and downloads the advisory database on first use.</p></div></li>
+        <li><span>3</span><div><h3>Restart the agent and confirm connectivity</h3><pre><code>{trivySetupCommands.restartAgent}</code></pre><p>After the next heartbeat, refresh this page. The agent advertises <code>security:trivy</code> and the <strong>Scan advisories</strong> button becomes available for an online device.</p></div></li>
+        <li><span>4</span><div><h3>Run and review the scan in Soul Room</h3><p>Select the device, click <strong>Scan advisories</strong>, and follow the job on the <strong>Jobs</strong> page. When it succeeds, return here to review severity counts, affected packages, CVE identifiers, and fixed versions.</p></div></li>
+      </ol>
+      <div className="advisoryResources"><div><strong>Restricted or offline networks</strong><span>Preload the Trivy database in the device image or configure an internal OCI database mirror before scanning.</span></div><a href="https://trivy.dev/docs/latest/getting-started/installation/" target="_blank" rel="noreferrer">Official installation guide</a><a href="https://trivy.dev/docs/latest/guide/configuration/db/" target="_blank" rel="noreferrer">Database guide</a></div>
+      <div className="modalActions"><button className="button primary" onClick={() => setShowScanInstructions(false)}>Done</button></div>
+    </div></Modal>}
   </>;
 }
 
@@ -909,19 +947,21 @@ function Users({ data, onData }: { data: FleetData; onData: (data: FleetData) =>
 
 function Health({ data }: { data: FleetData }) {
   const [deviceId, setDeviceId] = React.useState(data.devices[0]?.id || "");
+  const [range, setRange] = React.useState<"15m" | "1h" | "24h">("1h");
   React.useEffect(() => {
     if (!deviceId && data.devices[0]) setDeviceId(data.devices[0].id);
   }, [data.devices, deviceId]);
   if (data.devices.length === 0) return <EmptySection icon={<Activity size={28} />} title="No device health data" text="Start an enrolled agent to populate the device health charts." />;
   const device = data.devices.find((item) => item.id === deviceId) || data.devices[0];
-  const metrics = data.metrics.filter((metric) => metric.device_id === device.id);
+  const cutoff = Date.now() - { "15m": 15 * 60_000, "1h": 60 * 60_000, "24h": 24 * 60 * 60_000 }[range];
+  const metrics = data.metrics.filter((metric) => metric.device_id === device.id && new Date(metric.received_at || metric.device_time).getTime() >= cutoff);
   const deviceData = { ...data, metrics };
   const facts = data.inventory[device.id] || {};
   return <>
-    <Toolbar><label className="selectLabel">Device<select value={device.id} onChange={(event) => setDeviceId(event.target.value)}>{data.devices.map((item) => <option value={item.id} key={item.id}>{item.display_name}</option>)}</select></label><div className="healthIdentity"><Badge value={device.presence} /><span>{device.hardware_model || device.architecture}</span></div></Toolbar>
+    <Toolbar><label className="selectLabel">Device<select value={device.id} onChange={(event) => setDeviceId(event.target.value)}>{data.devices.map((item) => <option value={item.id} key={item.id}>{item.display_name}</option>)}</select></label><div className="segmented" aria-label="Health time range"><button className={range === "15m" ? "active" : ""} onClick={() => setRange("15m")}>15 min</button><button className={range === "1h" ? "active" : ""} onClick={() => setRange("1h")}>1 hour</button><button className={range === "24h" ? "active" : ""} onClick={() => setRange("24h")}>24 hours</button></div><div className="healthIdentity"><Badge value={device.presence} /><span>{device.hardware_model || device.architecture}</span></div></Toolbar>
     <section className="metricStrip telemetryMetrics"><Metric label="CPU" value={formatPercent(latestMatching(metrics, "cpu.utilization"))} note="Current utilization" tone="cyan" icon={<Cpu size={18} />} /><Metric label="Memory" value={formatPercent(latestMatching(metrics, "memory.utilization"))} note="Current utilization" tone="violet" icon={<HardDrive size={18} />} /><Metric label="Disk" value={formatPercent(latestMatching(metrics, "filesystem.utilization"))} note="Root filesystem" tone="amber" icon={<Database size={18} />} /><Metric label="Temperature" value={formatTemperature(latestMatching(metrics, "temperature"))} note={device.presence === "connected" ? "Thermal sensor" : `Last seen ${relativeTime(device.last_seen_at)}`} tone="red" icon={<Activity size={18} />} /></section>
     <section className="healthCharts">
-      <Panel title="Resource utilization" subtitle="CPU, memory, disk, and temperature over time"><div className="healthChart">{metrics.length ? <TelemetryChart data={telemetryChart(deviceData)} /> : <ChartEmpty text="Waiting for resource telemetry" />}</div></Panel>
+      <Panel title="Resource utilization" subtitle={`Independent scales preserve small changes during the last ${range}`}><div className="healthChart resourceTrendHeight">{metrics.length ? <TelemetryChart data={telemetryChart(deviceData)} /> : <ChartEmpty text="Waiting for resource telemetry" />}</div></Panel>
       <Panel title="Current resource load" subtitle="Latest utilization reported by the device"><div className="healthChart"><ResourceBars metrics={metrics} /></div></Panel>
       <Panel title="Network counters" subtitle="Total bytes reported across active interfaces"><div className="healthChart"><NetworkChart metrics={metrics} /></div></Panel>
       <Panel title="Installed capacity" subtitle="Physical memory and root filesystem capacity"><div className="healthChart"><CapacityChart memory={Number(facts.memory_total_bytes || latestMatching(metrics, "memory.total") || 0)} storage={Number(facts.storage_total_bytes || latestMatching(metrics, "filesystem.total") || 0)} /></div></Panel>
@@ -1025,7 +1065,7 @@ function Attention({ severity, title, detail, action, onClick }: { severity: str
 
 function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) { return <div className="overlay" onMouseDown={onClose}><aside className="drawer" onMouseDown={(event) => event.stopPropagation()}><header><div><span className="overline">Device detail</span><h2>{title}</h2></div><button className="iconButton" onClick={onClose}><X size={18} /></button></header><div className="drawerBody">{children}</div></aside></div>; }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) { return <div className="overlay centered" onMouseDown={onClose}><section className="modal" onMouseDown={(event) => event.stopPropagation()}><header><h2>{title}</h2><button className="iconButton" onClick={onClose}><X size={18} /></button></header>{children}</section></div>; }
+function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) { return <div className="overlay centered" onMouseDown={onClose}><section className={`modal${wide ? " modalWide" : ""}`} onMouseDown={(event) => event.stopPropagation()}><header><h2>{title}</h2><button className="iconButton" onClick={onClose} aria-label="Close dialog"><X size={18} /></button></header>{children}</section></div>; }
 
 function DetailList({ items }: { items: [string, React.ReactNode][] }) { return <dl className="detailList">{items.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "—"}</dd></div>)}</dl>; }
 
@@ -1035,9 +1075,33 @@ function Capacity({ label, value, detail }: { label: string; value: number; deta
 
 function AdminAction({ icon, title, detail, primary, meta, href }: { icon: React.ReactNode; title: string; detail: string; primary: string; meta: string; href?: string }) { const button = <>{icon}<div><strong>{title}</strong><span>{detail}</span></div><ChevronRight size={18} /></>; return <section className="adminAction">{href ? <a href={href} download>{button}</a> : <button disabled title={`${primary} action is not configured`}>{button}</button>}<small>{meta}</small></section>; }
 
-function TelemetryChart({ data }: { data: { time: string; cpu?: number; memory?: number; disk?: number; temperature?: number }[] }) {
-  const series = [{ label: "CPU", color: "#0891b2" }, { label: "Memory", color: "#5966be" }, { label: "Disk", color: "#c98a20" }, { label: "Temperature", color: "#cb5a52" }];
-  return <div className="chartComposition"><div className="chartKey">{series.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}</span>)}</div><div className="chartPlot"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 10, right: 22, left: -10, bottom: 2 }}><CartesianGrid stroke="#e6e9f2" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="time" minTickGap={38} tick={{ fill: "#747b91", fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis domain={[0, 100]} width={42} tickFormatter={(value) => `${value}%`} tick={{ fill: "#747b91", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip cursor={{ stroke: "#b1b5c8", strokeDasharray: "3 3" }} contentStyle={chartTooltipStyle} formatter={(value, seriesName) => [`${Number(value).toFixed(1)}${seriesName === "Temp °C" ? " °C" : "%"}`, seriesName]} /><Area type="monotone" dataKey="cpu" name="CPU" stroke="#0891b2" fill="#0891b2" fillOpacity={0.07} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Area type="monotone" dataKey="memory" name="Memory" stroke="#5966be" fill="#5966be" fillOpacity={0.045} strokeWidth={2.25} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Line type="monotone" dataKey="disk" name="Disk" stroke="#c98a20" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /><Line type="monotone" dataKey="temperature" name="Temp °C" stroke="#cb5a52" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /></AreaChart></ResponsiveContainer></div></div>;
+type TelemetryPoint = { timestamp: number; time: string; cpu?: number; memory?: number; disk?: number; temperature?: number };
+
+function TelemetryChart({ data }: { data: TelemetryPoint[] }) {
+  const series = [
+    { key: "cpu" as const, label: "CPU", color: "#0891b2", unit: "%" },
+    { key: "memory" as const, label: "Memory", color: "#5966be", unit: "%" },
+    { key: "disk" as const, label: "Disk", color: "#c98a20", unit: "%" },
+    { key: "temperature" as const, label: "Temperature", color: "#cb5a52", unit: "°C" },
+  ];
+  return <div className="resourceTrendGrid">{series.map((item) => {
+    const values = data.map((point) => point[item.key]).filter((value): value is number => value !== undefined);
+    const current = values.at(-1);
+    const minimum = values.length ? Math.min(...values) : undefined;
+    const maximum = values.length ? Math.max(...values) : undefined;
+    return <section className="resourceTrend" key={item.key}>
+      <header><span><i style={{ background: item.color }} />{item.label}</span><strong>{current === undefined ? "—" : `${current.toFixed(1)} ${item.unit}`}</strong><small>{minimum === undefined ? "No samples" : `${minimum.toFixed(1)}–${maximum?.toFixed(1)} ${item.unit}`}</small></header>
+      <ResponsiveContainer width="100%" height="100%"><AreaChart data={data} syncId="resource-health" margin={{ top: 5, right: 8, left: -23, bottom: 0 }}><defs><linearGradient id={`trend-${item.key}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={item.color} stopOpacity={0.2} /><stop offset="100%" stopColor={item.color} stopOpacity={0.015} /></linearGradient></defs><CartesianGrid stroke="#e8edf1" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="time" minTickGap={38} tick={{ fill: "#7a8792", fontSize: 9 }} axisLine={false} tickLine={false} /><YAxis domain={trendDomain(values, item.key === "temperature")} tick={{ fill: "#7a8792", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(value) => Number(value).toFixed(0)} /><Tooltip cursor={{ stroke: item.color, strokeDasharray: "3 3" }} contentStyle={chartTooltipStyle} formatter={(value) => [`${Number(value).toFixed(2)} ${item.unit}`, item.label]} /><Area type="monotone" dataKey={item.key} name={item.label} connectNulls stroke={item.color} strokeWidth={2.75} fill={`url(#trend-${item.key})`} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }} /></AreaChart></ResponsiveContainer>
+    </section>;
+  })}</div>;
+}
+
+function trendDomain(values: number[], temperature: boolean): [number, number] {
+  if (!values.length) return temperature ? [0, 100] : [0, 100];
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const padding = Math.max((maximum - minimum) * 0.2, temperature ? 0.5 : 0.25);
+  return [Math.max(temperature ? -50 : 0, minimum - padding), Math.min(temperature ? 200 : 100, maximum + padding)];
 }
 
 function PresenceChart({ connected, total }: { connected: number; total: number }) {
@@ -1100,8 +1164,8 @@ function canAdminister(membership: Membership) { return ["platform_administrator
 function normalizeArchitecture(value?: string) { const normalized = (value || "").toLowerCase(); if (["aarch64", "arm64"].includes(normalized)) return "arm64"; if (["arm", "armv7", "armv7l", "armhf"].includes(normalized)) return "armv7"; if (["amd64", "x86_64"].includes(normalized)) return "amd64"; return normalized; }
 function formatCampaignState(value: string) { return value.replaceAll("canary", "pilot").replaceAll("_", " "); }
 
-function telemetryChart(data: FleetData) { const grouped = new Map<string, { time: string; cpu?: number[]; memory?: number[]; disk?: number[]; temperature?: number[] }>(); data.metrics.forEach((metric) => { const time = new Date(metric.device_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); const point = grouped.get(time) || { time, cpu: [], memory: [], disk: [], temperature: [] }; if (metric.name.includes("cpu.utilization")) point.cpu?.push(metric.value); if (metric.name.includes("memory.utilization")) point.memory?.push(metric.value); if (metric.name.includes("filesystem.utilization")) point.disk?.push(metric.value); if (metric.name.includes("temperature")) point.temperature?.push(metric.value); grouped.set(time, point); }); const points = Array.from(grouped.values()).map((point) => ({ time: point.time, cpu: average(point.cpu), memory: average(point.memory), disk: average(point.disk), temperature: average(point.temperature) })); const step = Math.max(1, Math.ceil(points.length / 180)); return points.filter((_, index) => index % step === 0 || index === points.length - 1); }
-function average(values?: number[]) { return values?.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : undefined; }
+export function telemetryChart(data: FleetData): TelemetryPoint[] { const grouped = new Map<number, { timestamp: number; cpu?: number[]; memory?: number[]; disk?: number[]; temperature?: number[] }>(); data.metrics.forEach((metric) => { const timestamp = Math.floor(new Date(metric.device_time).getTime() / 60_000) * 60_000; const point = grouped.get(timestamp) || { timestamp, cpu: [], memory: [], disk: [], temperature: [] }; if (metric.name.includes("cpu.utilization")) point.cpu?.push(metric.value); if (metric.name.includes("memory.utilization")) point.memory?.push(metric.value); if (metric.name.includes("filesystem.utilization")) point.disk?.push(metric.value); if (metric.name.includes("temperature")) point.temperature?.push(metric.value); grouped.set(timestamp, point); }); const points = Array.from(grouped.values()).sort((left, right) => left.timestamp - right.timestamp).map((point) => ({ timestamp: point.timestamp, time: new Date(point.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), cpu: average(point.cpu), memory: average(point.memory), disk: average(point.disk), temperature: average(point.temperature) })); const step = Math.max(1, Math.ceil(points.length / 180)); return points.filter((_, index) => index % step === 0 || index === points.length - 1); }
+function average(values?: number[]) { return values?.length ? values.reduce((a, b) => a + b, 0) / values.length : undefined; }
 function latestMatching(metrics: FleetData["metrics"], name: string) { return metrics.filter((metric) => metric.name.includes(name)).at(-1)?.value; }
 function formatPercent(value?: number) { return value === undefined ? "—" : `${value.toFixed(0)}%`; }
 function formatTemperature(value?: number) { return value === undefined ? "—" : `${value.toFixed(1)} °C`; }

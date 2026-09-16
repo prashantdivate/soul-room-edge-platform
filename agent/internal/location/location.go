@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"net"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/soul-room/edge-agent/internal/protocol"
@@ -16,6 +19,7 @@ type Config struct {
 	Longitude   float64
 	Label       string
 	GPSDAddress string
+	IPURL       string
 }
 
 func Collect(ctx context.Context, cfg Config) *protocol.Location {
@@ -27,8 +31,55 @@ func Collect(ctx context.Context, cfg Config) *protocol.Location {
 			value.Label = cfg.Label
 			return value
 		}
+	case "ip":
+		return fromIP(ctx, cfg.IPURL, cfg.Label)
 	}
 	return nil
+}
+
+func fromIP(ctx context.Context, endpoint, configuredLabel string) *protocol.Location {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	response, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil
+	}
+	var result struct {
+		Success   *bool   `json:"success"`
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+		City      string  `json:"city"`
+		Region    string  `json:"region"`
+		Country   string  `json:"country"`
+	}
+	if json.NewDecoder(io.LimitReader(response.Body, 64*1024)).Decode(&result) != nil || (result.Success != nil && !*result.Success) || !validCoordinates(result.Latitude, result.Longitude) {
+		return nil
+	}
+	label := strings.TrimSpace(configuredLabel)
+	if label == "" {
+		parts := make([]string, 0, 3)
+		for _, part := range []string{result.City, result.Region, result.Country} {
+			if part = strings.TrimSpace(part); part != "" {
+				parts = append(parts, part)
+			}
+		}
+		label = strings.Join(parts, ", ")
+		if label != "" {
+			label += " (network approximate)"
+		}
+	}
+	return &protocol.Location{Latitude: result.Latitude, Longitude: result.Longitude, Source: "ip", Label: label}
+}
+
+func validCoordinates(latitude, longitude float64) bool {
+	return latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180 && (latitude != 0 || longitude != 0)
 }
 
 func fromGPSD(ctx context.Context, address string) *protocol.Location {

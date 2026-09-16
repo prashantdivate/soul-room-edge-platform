@@ -1,236 +1,270 @@
 <div align="center">
   <img src="./cloud-infra/web/public/soul-room-mark.png" width="220" alt="Soul Room logo">
   <h1>Soul Room</h1>
-  <p><strong>Open edge-fleet operations for Linux devices, gateways, and the software they run.</strong></p>
+  <p><strong>Manage Linux edge devices, gateways, software, and updates from one place.</strong></p>
 </div>
 
-Soul Room joins a lightweight Linux agent with a tenant-aware control plane and a
-focused operations console. It is designed for Yocto devices, industrial
-gateways, single-board computers, and general embedded Linux fleets without binding the
-operator workflow to Windows, Linux, or macOS.
+Soul Room combines a lightweight Linux agent, a tenant-aware control plane, and
+a React operations console. It is intended for Ubuntu and Debian systems,
+Yocto-based products, industrial gateways, single-board computers, and other
+embedded Linux devices.
 
-> Soul Room is an implemented MVP foundation. It is suitable for evaluation and
-> continued product engineering, but it is not yet a claim of audited,
-> production-certified fleet infrastructure.
+> **Project status:** Soul Room is an implemented MVP for evaluation and
+> continued product development. It is not yet an audited or certified
+> production fleet service. Review the [implementation status](./cloud-infra/docs/IMPLEMENTATION_STATUS.md)
+> before using it for a customer deployment.
 
-## What Works Today
+## Console Preview
 
-| Area | Capabilities |
-| --- | --- |
-| Fleet visibility | Real enrollment, device presence, hardware/OS inventory, telemetry, downstream gateways, and actual device locations |
-| Operations | Typed jobs, offline delivery queue, diagnostics, bounded log collection, and bundled self-hosted ShellHub remote access |
-| Administration | Tenant-isolated users, RBAC, audit history, backups, and UI-managed operational defaults with protected environment-managed secrets |
-| Updates | Capability-gated Mender, RAUC, OSTree, SWUpdate, Flatpak, and custom-plugin campaigns with signed artifacts, durable reboot recovery, health confirmation, rollback, and pilot-first delivery |
-| Software posture | Installed Debian/RPM package inventory and optional Trivy-backed OS vulnerability advisory scans |
-| Governance | Tenant isolation, built-in RBAC, team-user creation, server-side sessions, and append-oriented audit activity |
-| Platform | One launcher command, lightweight local durable state, backup/restore profiles, Helm and Terraform foundations |
+<p align="center">
+  <img src="./docs/assets/soul-room-login.png" alt="Soul Room login screen" width="100%">
+</p>
 
-Soul Room does not generate demo fleet data. Empty screens remain empty until a real
-agent reports data.
+## Quick Start
 
-## Architecture
+### 1. Prepare the installation
 
-```mermaid
-flowchart LR
-    subgraph Edge["Linux edge device"]
-        A["Soul Room agent"]
-        R["ShellHub agent"]
-        I["Inventory and telemetry"]
-        J["Typed job handlers"]
-        A --- I
-        A --- J
-    end
-    subgraph Control["Soul Room control plane"]
-        G["mTLS device gateway"]
-        API["Tenant-aware API"]
-        S["Durable state"]
-        API --- S
-        G --- S
-    end
-    UI["React operations console"] --> API
-    A -->|"outbound HTTPS + device certificate"| G
-    R -->|"outbound secure WebSocket"| SH["Bundled ShellHub gateway"]
-    API -->|"queued operations"| G
-    API -.->|"RBAC + audited launch"| SH
-```
+Install Docker Desktop, or Docker Engine with Docker Compose v2. No local Go or
+Node.js installation is required to run the platform.
 
-The agent initiates every control-plane connection. Device private keys are
-created locally and never uploaded. Jobs are allowlisted, validated, scoped,
-time-limited, and persisted for idempotency; arbitrary remote shell commands are
-not part of the agent protocol.
-
-## Run The Platform
-
-The only host requirement is Docker Desktop or Docker Engine with Docker
-Compose. Copy `cloud-infra/.env.example` to `cloud-infra/.env`, then set your
-company identity and initial owner account:
-
-```dotenv
-SOULROOM_ORGANIZATION_NAME=Acme Devices
-SOULROOM_ORGANIZATION_SLUG=acme-devices
-SOULROOM_ADMIN_EMAIL=admin@acme.com
-SOULROOM_ADMIN_PASSWORD=replace-with-a-long-unique-password
-```
-
-From the repository root, use the launcher so you do not need to remember
-Compose arguments:
+Create your local configuration from the example file:
 
 ```bash
-# Linux or macOS: first run or after source changes
-sh platform.sh build
+# Linux, macOS, or WSL
+cp cloud-infra/.env.example cloud-infra/.env
+```
 
-# Windows Command Prompt or PowerShell: first run or after source changes
+```powershell
+# Windows PowerShell
+Copy-Item cloud-infra\.env.example cloud-infra\.env
+```
+
+Open `cloud-infra/.env` and choose the organization and first owner account:
+
+```dotenv
+SOULROOM_ORGANIZATION_NAME=Your Company
+SOULROOM_ORGANIZATION_SLUG=your-company
+SOULROOM_ADMIN_EMAIL=owner@your-company.com
+SOULROOM_ADMIN_PASSWORD=choose-a-unique-password-with-12-or-more-characters
+```
+
+These are examples, not shared Soul Room credentials. For a physical device,
+also set `SOULROOM_DEVICE_PUBLIC_HOST` to the DNS name or LAN address that the
+device can reach. See [physical-device networking](./cloud-infra/docs/RUNNING_LOCALLY.md#connect-a-physical-device).
+
+### 2. Build and start Soul Room
+
+Run one command from the repository root:
+
+```bash
+# Linux, macOS, or WSL
+./platform.sh build
+```
+
+```bat
+:: Windows Command Prompt or PowerShell
 platform.cmd build
 ```
 
-Use `platform.sh up` or `platform.cmd up` for later starts without rebuilding.
-The launcher also supports `down`, `refresh`, `restart`, `status`, `logs`, and
-`doctor`. Run `sh platform.sh help` or `platform.cmd help` for examples.
+Open [http://localhost:3080](http://localhost:3080). When another computer is
+hosting the stack, replace `localhost` with that computer's DNS name or IP
+address.
 
-Open [http://localhost:3080](http://localhost:3080) and sign in with the owner
-account configured in `cloud-infra/.env`.
+### 3. Sign in
 
-Compose starts the console, combined API/device gateway, and the pinned
-ShellHub Community Edition services. The local control plane uses its durable
-`app-data` volume; unused PostgreSQL, MinIO, and Mailpit containers are not
-started. ShellHub is embedded in **Remote access** and is also available at
-[http://localhost:8088](http://localhost:8088). Complete its setup wizard once
-before adding remote-access devices. Its SSH gateway listens on port `22222`.
-It creates only the configured administrator and organization. Bootstrap
-credentials are applied only to a clean installation and are not reapplied on
-normal restarts. Stop it with:
+Soul Room does **not** have a universal demo login.
+
+| Installation | Account to use |
+| --- | --- |
+| New, empty data volume | The exact `SOULROOM_ADMIN_EMAIL` and `SOULROOM_ADMIN_PASSWORD` values set in `cloud-infra/.env` before the first start |
+| Existing data volume | The account created when that volume was first initialized |
+| Normal rebuild or restart | The existing account; bootstrap values are not applied again |
+
+Changing `.env` later does not change an existing owner's email or password.
+This protects installed accounts from being silently overwritten. For a
+disposable local environment, the [clean reset](#reset-a-local-installation)
+creates a new installation from the current `.env` values.
+
+### 4. Use the launcher
+
+| Command | Purpose |
+| --- | --- |
+| `./platform.sh up` / `platform.cmd up` | Start existing images |
+| `./platform.sh build` / `platform.cmd build` | Build images and start the platform |
+| `./platform.sh refresh` / `platform.cmd refresh` | Rebuild and recreate containers after source changes |
+| `./platform.sh down` / `platform.cmd down` | Stop containers and preserve data |
+| `./platform.sh status` / `platform.cmd status` | Show container and health status |
+| `./platform.sh logs` / `platform.cmd logs` | Follow platform logs |
+| `./platform.sh doctor` / `platform.cmd doctor` | Check Docker and validate Compose |
+
+The normal stack starts the Soul Room console and control plane together with a
+self-hosted ShellHub deployment. Fleet state is kept in Docker volumes and is
+preserved by `down`, `restart`, and `refresh`.
+
+## Connect Your First Device
+
+The same agent runs on supported Ubuntu, Debian, and Yocto-based Linux systems.
+The device CPU architecture determines which bundle to build; the distribution
+determines only how you integrate the service.
+
+### 1. Create enrollment material
+
+In Soul Room, open **Management > Enrollment**:
+
+1. Generate a one-time enrollment token.
+2. Download `soul-room-dev-ca.pem`.
+3. Note the device gateway endpoint shown on the page.
+
+### 2. Build the matching agent bundle
+
+Check the target architecture with `uname -m`, then build from the repository
+root:
+
+| `uname -m` result | Bundle |
+| --- | --- |
+| `x86_64` | `embedded-linux-amd64` |
+| `aarch64` or `arm64` | `embedded-linux-arm64` |
+| `armv7l` or `armv7` | `embedded-linux-armv7` |
 
 ```bash
-docker compose -f cloud-infra/compose.yaml down
-```
+# x86-64
+docker build --target embedded-linux-amd64 --output type=local,dest=agent/dist/embedded-linux-amd64 agent
 
-See [local platform setup](./cloud-infra/docs/RUNNING_LOCALLY.md) for addresses,
-physical-device networking, logs, backup, and restore.
-
-## Connect An Embedded Linux Device
-
-Build the installation bundle that matches the device on any Docker host:
-
-```bash
-# 64-bit ARM: aarch64 / arm64
+# 64-bit ARM, including Raspberry Pi 64-bit and i.MX8MP
 docker build --target embedded-linux-arm64 --output type=local,dest=agent/dist/embedded-linux-arm64 agent
 
-# 32-bit ARM: armv7 / armhf
+# 32-bit ARMv7
 docker build --target embedded-linux-armv7 --output type=local,dest=agent/dist/embedded-linux-armv7 agent
 ```
 
-On the device, use `/opt/soul-room-agent` as the temporary project staging
-directory. Installed runtime paths are:
+Each output directory contains `edge-agent`, `edge-agentctl`, the default
+configuration, a systemd unit, and `install.sh`.
 
-```text
-/usr/bin/edge-agent
-/usr/bin/edge-agentctl
-/etc/edge-agent/config.yaml
-/etc/edge-agent/ca.pem
-/var/lib/edge-agent
-```
+### 3. Install and enroll on the device
 
-Generate a token and download the development CA from **Enrollment**, then use
-the exact command shape below. Flags after `enroll` belong to that subcommand:
+Copy the matching bundle and downloaded CA to a temporary directory on the
+device, such as `/opt/soul-room-agent`, then run:
 
 ```bash
-sudo edge-agentctl -config /etc/edge-agent/config.yaml enroll -token YOUR_TOKEN -name embedded-linux-arm64
-sudo systemctl daemon-reload
-sudo systemctl enable --now edge-agent
+sudo sh install.sh \
+  --endpoint https://SOUL_ROOM_HOST:8443 \
+  --ca ./soul-room-dev-ca.pem \
+  --token ONE_TIME_TOKEN \
+  --name DEVICE_NAME
+```
+
+`SOUL_ROOM_HOST` must be the same reachable DNS name or IP address configured
+for the platform. The installer does not create a dedicated Linux user. It
+installs the binaries, preserves an existing device identity, enrolls the
+device, and starts the systemd service.
+
+### 4. Verify the connection
+
+```bash
+sudo edge-agentctl -config /etc/edge-agent/config.yaml status
+sudo systemctl status edge-agent
 sudo journalctl -u edge-agent -f
 ```
 
-The service runs in the system service context and does not create or require a
-dedicated Linux account. Follow the complete
-[embedded Linux installation guide](./agent/docs/EMBEDDED_LINUX_INSTALLATION.md) or the
-[Yocto/i.MX8MP guide](./agent/docs/RUNNING_ON_YOCTO_IMX8MP.md).
+A connected device appears under **Fleet > Devices** after its first
+heartbeat. Inventory and telemetry populate from real device reports; Soul Room
+does not create demo devices or synthetic telemetry.
 
-## Remote Access With ShellHub
+Location reporting is intentionally disabled by default. Use the terminal UI
+to select `static`, `gpsd`, or explicitly enabled IP-based location, then
+restart the service:
 
-Soul Room includes a self-hosted ShellHub Community Edition deployment. No
-external ShellHub URL is required. On first startup:
-
-1. Open **Remote access** and launch the embedded ShellHub portal, or use [http://localhost:8088/setup](http://localhost:8088/setup).
-2. Create the ShellHub administrator and first namespace.
-3. Install the ShellHub agent on the device using the tenant ID shown by that namespace.
-4. Accept the pending device in ShellHub and copy its SSHID.
-5. In Soul Room, open **Remote access**, select the matching fleet device, and save the SSHID.
-
-The Soul Room agent and ShellHub agent are separate services: the former owns
-fleet telemetry, jobs, and OTA; the latter owns the outbound remote-shell
-tunnel. Soul Room checks RBAC and writes an audit event before showing the
-sandboxed ShellHub console inside the platform. See the [complete ShellHub guide](./cloud-infra/docs/SHELLHUB_INTEGRATION.md)
-for Ubuntu, Yocto, networking, persistence, and production TLS requirements.
-
-## Self-Hosted Flatpak Updates
-
-An update campaign can either use a system remote already configured on the
-device or accept your own HTTPS `.flatpakrepo` descriptor URL. When a descriptor
-is supplied, the agent adds it as a system remote before validating the
-application reference and optional pinned commit. GPG verification remains
-enabled; Soul Room does not use `--no-gpg-verify`.
-
-Example campaign inputs:
-
-```text
-Remote name: factory
-Repository descriptor: https://updates.example.com/factory.flatpakrepo
-Application reference: com.example.Kiosk
-OSTree commit: optional 64-character commit
+```bash
+sudo edge-agentctl -config /etc/edge-agent/config.yaml tui
+sudo systemctl restart edge-agent
 ```
 
-Rollouts begin with the configured pilot group and require promotion before the
-remaining devices are queued. The API field remains `canary_percent` for
-protocol compatibility; the console uses the clearer operator term "pilot
-group."
+The complete workflow, including native builds and non-systemd image
+integration, is in the [embedded Linux installation guide](./agent/docs/EMBEDDED_LINUX_INSTALLATION.md).
+For an image-integrated device, continue with the [Yocto guide](./agent/docs/YOCTO_INTEGRATION.md)
+or the [i.MX8MP example](./agent/docs/RUNNING_ON_YOCTO_IMX8MP.md).
 
-## OSTree Repository Updates
+## What Is Included
 
-OSTree OS campaigns can use either a signed static-delta artifact or an online
-repository. Online campaigns pull a pinned `REF@COMMIT` from a remote provisioned
-on the device with HTTPS and native GPG trust. Soul Room will not accept a remote
-with GPG verification disabled or permissive TLS, and it deploys and confirms
-the exact commit rather than the human release version.
+| Area | Current capability |
+| --- | --- |
+| Fleet | Enrollment, presence, hardware and OS inventory, gateways, telemetry, and device locations |
+| Operations | Typed jobs, offline delivery, diagnostics, bounded log collection, deployments, and alerts |
+| Updates | Capability-gated Mender, RAUC, OSTree, SWUpdate, Flatpak, and custom adapters with pilot-first rollout |
+| Remote access | Bundled self-hosted ShellHub with outbound device tunnels and audited launch from Soul Room |
+| Software posture | Debian/RPM package inventory and optional Trivy-backed vulnerability advisory scans |
+| Administration | Tenant isolation, users and roles, platform settings, audit history, backup, and restore |
+| Interface | Responsive React console, fleet search, charts, exports, and MapLibre/OpenStreetMap fleet mapping |
 
-Device-side remote provisioning, release signing, bootloader integration, and
-the complete campaign fields are documented in
-[OTA adapters](./agent/docs/OTA_ADAPTERS.md). A successful software test does not
-replace power-loss, rollback, and bootloader qualification on each production
-hardware/image combination.
+The cloud and agent deliberately reject capabilities a device does not report.
+For OTA, installing an updater binary is not enough: the device image must also
+provide the updater's signing trust, storage layout, boot integration, health
+check, and rollback behavior. Read the [OTA adapter guide](./agent/docs/OTA_ADAPTERS.md)
+before creating a production update campaign.
 
-## Package And CVE Posture
+## Remote Access
 
-Agents report installed Debian or RPM packages as inventory. If
-[Trivy](https://www.trivy.dev/docs/latest/getting-started/installation/) is
-installed on a device, it also reports `security:trivy`; an operator can then
-queue an OS-package advisory scan from **Applications**.
+ShellHub Community Edition is included in Compose; no external ShellHub account
+or URL is required. On first use, open **Operations > Remote access**, create the
+ShellHub administrator and namespace in the embedded setup screen, then install
+the separate ShellHub agent only on devices that permit interactive access.
 
-Soul Room shows the scanner, scan time, advisory severity, affected package,
-installed version, and available fixed version. These are advisory matches, not
-an automatic declaration that a device is exploitable or unsuitable for
-production. Operators should consider package use and exposure before acting.
+The Soul Room agent handles fleet inventory, telemetry, jobs, and OTA. The
+ShellHub agent handles the remote SSH tunnel. See the [ShellHub guide](./cloud-infra/docs/SHELLHUB_INTEGRATION.md)
+for device enrollment, ports, persistence, and production TLS requirements.
+
+## Data And Clean Installs
+
+Local `.env` files, certificates, private keys, backups, generated device
+identity, and file-backed platform state are ignored by Git. Docker volumes hold
+registered devices, telemetry, jobs, events, certificates, and ShellHub state.
+A new clone starts with an empty fleet.
+
+### Reset a local installation
+
+Use this only when all local platform and ShellHub data may be deleted:
+
+```bash
+docker compose -f cloud-infra/compose.yaml down -v
+docker compose -f cloud-infra/compose.yaml up --build -d
+```
+
+The first command permanently removes local accounts, devices, telemetry,
+jobs, events, certificates, and ShellHub records. Create a
+[backup](./cloud-infra/docs/BACKUP_RESTORE.md) first when the data matters.
 
 ## Repository Layout
 
 ```text
-agent/          Go edge agent, CLI, packaging, Yocto material, and device docs
-cloud-infra/    Go control plane, React console, Compose, Helm, Terraform, docs
+agent/          Go edge agent, CLI, Linux packaging, Yocto recipes, and device docs
+cloud-infra/    Go control plane, React console, Compose, Helm, Terraform, and cloud docs
+docs/           Repository-level documentation index and screenshots
+platform.sh     Cross-platform launcher for Linux, macOS, and WSL
+platform.cmd    Windows launcher
 ```
 
-Keep the agent and cloud in this one repository while their enrollment, job,
-telemetry, and update contracts evolve together. Each directory has its own
-Dockerfile, tests, documentation, and release surface, so it can be split into a
-dedicated repository later without changing the code layout. The root README is
-the end-to-end entry point; component READMEs remain independently usable.
+Keeping agent and cloud code together makes protocol changes reviewable in one
+place. Each component still has its own build, tests, README, and release
+surface, so it can be split later if independent release cycles become useful.
 
-Useful deeper documentation:
+## Documentation
 
-- [Cloud architecture](./cloud-infra/docs/ARCHITECTURE.md)
-- [Agent architecture](./agent/docs/ARCHITECTURE.md)
-- [Agent threat model](./agent/docs/THREAT_MODEL.md)
-- [ShellHub integration](./cloud-infra/docs/SHELLHUB_INTEGRATION.md)
-- [Cloud implementation status](./cloud-infra/docs/IMPLEMENTATION_STATUS.md)
-- [Agent implementation status](./agent/docs/IMPLEMENTATION_STATUS.md)
+Start with the [documentation index](./docs/README.md), or go directly to a
+common task:
+
+| Task | Guide |
+| --- | --- |
+| Run the platform locally | [Local platform guide](./cloud-infra/docs/RUNNING_LOCALLY.md) |
+| Configure an on-premises installation | [On-premises administration](./cloud-infra/docs/ONPREM_ADMIN.md) |
+| Understand the control plane | [System architecture](./cloud-infra/docs/SYSTEM_ARCHITECTURE.md) |
+| Build, deploy, and configure the agent | [Agent guide](./agent/README.md) |
+| Review detailed Linux installation | [Embedded Linux installation](./agent/docs/EMBEDDED_LINUX_INSTALLATION.md) |
+| Integrate with Yocto | [Yocto integration](./agent/docs/YOCTO_INTEGRATION.md) |
+| Configure update mechanisms | [OTA adapters](./agent/docs/OTA_ADAPTERS.md) |
+| Configure remote access | [ShellHub integration](./cloud-infra/docs/SHELLHUB_INTEGRATION.md) |
+| Diagnose an offline agent | [Agent troubleshooting](./agent/docs/TROUBLESHOOTING.md) |
+| Back up or restore data | [Backup and restore](./cloud-infra/docs/BACKUP_RESTORE.md) |
+| Review security assumptions | [Cloud threat model](./cloud-infra/docs/THREAT_MODEL.md) and [agent threat model](./agent/docs/THREAT_MODEL.md) |
 
 ## Development Checks
 
@@ -240,40 +274,9 @@ docker build -f cloud-infra/deploy/compose/service.Dockerfile --target test clou
 docker compose -f cloud-infra/compose.yaml config
 ```
 
-The React production build is executed by the web image build. Keep secrets,
-private keys, generated device identity, data volumes, and vulnerability reports
-out of source control.
-
-## Local Data Hygiene
-
-Compose stores device registrations, events, certificates, object data, and
-database state in named Docker volumes. Local `.env` files, backups, generated
-agent state, certificates, and file-backed control-plane stores are ignored by
-Git. A fresh clone starts with only the local administrator and organization;
-it contains no devices, telemetry, jobs, or events from another installation.
-
-To intentionally erase a local installation and return to that clean state, run
-these commands from the repository root on Windows, Linux, or macOS:
-
-```bash
-docker compose -f cloud-infra/compose.yaml down -v
-docker compose -f cloud-infra/compose.yaml up --build -d
-```
-
-The first command permanently removes this installation's registered devices,
-telemetry, jobs, events, certificates, database records, and object data. It does
-not delete source files. Use the maintenance backup profile first when the local
-fleet data matters.
-
-## Product Direction
-
-The strongest next investments are production PostgreSQL/S3 adapters, managed
-artifact upload and provenance, multi-wave rollout scheduling, SSO/MFA, alert
-routing, policy-as-code, software bill-of-material ingestion, and deeper
-ShellHub API/identity automation. The implemented/deferred matrices remain the source
-of truth while those areas evolve.
+The React production build runs as part of the web image build.
 
 ## License
 
-The agent and cloud components contain their respective license files. Review
-them before redistribution or commercial deployment.
+The agent and cloud components contain their own license files. Review both
+before redistribution or commercial deployment.

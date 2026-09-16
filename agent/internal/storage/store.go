@@ -99,6 +99,21 @@ func (s *Store) Stats() (QueueStats, error) {
 	return QueueStats{Items: len(items), Bytes: bytes, DroppedItems: s.dropped}, nil
 }
 
+func (s *Store) ArchiveQueue() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := os.Stat(s.path); errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	archivePath := filepath.Join(s.dir, "queue.archived-"+time.Now().UTC().Format("20060102T150405.000000000Z")+".jsonl")
+	if err := os.Rename(s.path, archivePath); err != nil {
+		return "", err
+	}
+	return archivePath, nil
+}
+
 func (s *Store) loadLocked() ([]QueueItem, error) {
 	f, err := os.Open(s.path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -110,6 +125,12 @@ func (s *Store) loadLocked() ([]QueueItem, error) {
 	defer f.Close()
 	var out []QueueItem
 	sc := bufio.NewScanner(f)
+	maxInt := int64(^uint(0) >> 1)
+	maxLine := maxInt
+	if s.maxBytes <= maxInt/2 {
+		maxLine = s.maxBytes * 2 // JSON base64 encoding can expand a binary payload by one third.
+	}
+	sc.Buffer(make([]byte, 64*1024), int(maxLine))
 	for sc.Scan() {
 		var it QueueItem
 		if err := json.Unmarshal(sc.Bytes(), &it); err != nil {

@@ -195,6 +195,8 @@ func (s *Server) DeviceHandler() http.Handler {
 	mux.HandleFunc("/v1/enroll", s.deviceEnroll)
 	mux.HandleFunc("/device/v1/heartbeat", s.deviceHeartbeat)
 	mux.HandleFunc("/v1/heartbeat", s.deviceHeartbeat)
+	mux.HandleFunc("/device/v1/status", s.deviceStatus)
+	mux.HandleFunc("/v1/status", s.deviceStatus)
 	mux.HandleFunc("/device/v1/telemetry", s.deviceTelemetry)
 	mux.HandleFunc("/v1/telemetry", s.deviceTelemetry)
 	mux.HandleFunc("/device/v1/inventory", s.deviceInventory)
@@ -205,6 +207,18 @@ func (s *Server) DeviceHandler() http.Handler {
 	mux.HandleFunc("/v1/jobs/result", s.deviceJobResult)
 	mux.HandleFunc("/v1/offline", s.deviceOffline)
 	return secureHeaders(mux)
+}
+
+func (s *Server) deviceStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	if _, err := s.deviceContextFromHeaders(r); err != nil {
+		errorJSON(w, http.StatusUnauthorized, "unknown_device", "device identity rejected; enroll this device again if platform data was reset")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "accepted"})
 }
 
 func secureHeaders(next http.Handler) http.Handler {

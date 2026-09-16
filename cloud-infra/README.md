@@ -1,63 +1,94 @@
 # Soul Room Control Plane
 
-Server-side fleet-management platform for Linux edge agents, gateways, and
-downstream embedded controllers. It supports SaaS and customer-managed
-on-premises deployments from the same modular-monolith codebase.
+The Soul Room control plane provides the web console, tenant-aware API, device
+gateway, durable local state, and bundled ShellHub remote-access services for
+Linux edge fleets.
 
-## MVP Scope
+Use the repository [README](../README.md) for the shortest end-to-end workflow,
+including building and enrolling the edge agent.
 
-Implemented in this repository:
+## Start Locally
 
-* tenant-aware API server
-* local password authentication and server-side sessions
-* centralized RBAC checks
-* enrollment-token creation and consumption
-* development CA and unique per-device certificate issuance
-* device registry, presence, heartbeat, inventory, telemetry ingestion
-* actual GPSD, fixed-site, and operator-managed device locations with fleet map
-* typed jobs and offline-device queue semantics
-* tenant-scoped team accounts with built-in roles and password hashing
-* bundled self-hosted ShellHub Community Edition with audited launch integration
-* audit log
-* artifacts, applications, deployments, OS release plans, pilot-group Flatpak updates, alerts and quotas
-* protocol contracts, OpenAPI sketch, PostgreSQL migrations
-* Docker Compose, Helm skeleton, Terraform skeleton, backup/restore scripts
-* responsive React/TypeScript operations console with global fleet search
-* device package inventory with optional Trivy advisory results
-* capability-gated Mender, RAUC, OSTree, SWUpdate, Flatpak, and custom adapter
-  campaigns with pilot-first rollout and explicit promotion
+From the repository root, create <code>cloud-infra/.env</code> from
+<code>cloud-infra/.env.example</code>. Choose your own organization name,
+owner email, and owner password before the first start.
 
-The implementation uses repository interfaces so the runtime can use the local
-durable store for development while production deployments use PostgreSQL and
-S3-compatible object storage.
+~~~bash
+# Linux, macOS, or WSL
+cp cloud-infra/.env.example cloud-infra/.env
+./platform.sh build
+~~~
 
-## Local Workflow
+~~~bat
+:: Windows Command Prompt or PowerShell
+copy cloud-infra\.env.example cloud-infra\.env
+platform.cmd build
+~~~
 
-```text
-../platform.sh build
-# or on Windows: ..\platform.cmd build
-```
+Open [http://localhost:3080](http://localhost:3080).
 
-Then open `http://localhost:3080`. ShellHub is embedded directly in **Operations
-> Remote access**, and its SSH gateway uses port `22222`. The local Compose
-stack starts every required service automatically; no operating-system-specific
-scripts are required. ShellHub still requires its secure one-time web setup to
-create its first administrator and namespace.
+There is no shared login from this README. A new installation creates its first
+owner from <code>SOULROOM_ADMIN_EMAIL</code> and
+<code>SOULROOM_ADMIN_PASSWORD</code> in <code>.env</code>. An existing data
+volume keeps the account created during its first initialization; changing
+<code>.env</code> does not overwrite that account.
 
-The default local stack omits unused Soul Room PostgreSQL, MinIO, and Mailpit
-services. Current platform state is stored in the `app-data` volume; ShellHub
-retains its own PostgreSQL and Valkey services for remote-access identity and
-session coordination.
+The local launcher also supports <code>up</code>, <code>down</code>,
+<code>refresh</code>, <code>restart</code>, <code>status</code>,
+<code>logs</code>, and <code>doctor</code>. See
+[Run the platform locally](docs/RUNNING_LOCALLY.md) for networking, service
+addresses, persistence, and first-device setup.
 
-### Platform settings
+## Current Capabilities
 
-After signing in as the organization owner, open **Settings > Platform
-settings** to configure organization identity, heartbeat presence,
-telemetry, rollout, enrollment, job defaults, and the ShellHub portal and SSH
-port. These settings are stored per
-organization and take effect without a container restart. `.env` remains
-optional for deployment defaults and required only for infrastructure values or
-secrets. See [On-premises administration](docs/ONPREM_ADMIN.md).
+| Area | Implemented |
+| --- | --- |
+| Fleet | Device enrollment, certificate identity, presence, telemetry, inventory, gateways, and map locations |
+| Operations | Typed jobs, offline queueing, diagnostics, deployments, update campaigns, alerts, and exports |
+| Administration | Tenant-scoped users and roles, settings, audit history, quotas, backup, and restore |
+| Remote access | Self-hosted ShellHub Community Edition embedded in the Soul Room console |
+| Updates | Capability-gated Mender, RAUC, OSTree, SWUpdate, Flatpak, and custom-adapter campaigns |
+| Software posture | Debian/RPM inventory and optional on-demand Trivy advisory results |
 
-See `docs/RUNNING_LOCALLY.md` for device connectivity and local credentials.
-See `docs/SHELLHUB_INTEGRATION.md` before enrolling a remote-access device.
+The default Compose stack uses a local durable Soul Room store plus ShellHub's
+own PostgreSQL and Valkey services. Unused Soul Room PostgreSQL, MinIO, and
+Mailpit containers are not started.
+
+## Configuration
+
+Configuration is intentionally split by responsibility:
+
+- <code>.env</code> holds bootstrap identity, network endpoints, secrets, and
+  infrastructure values.
+- **Settings > Platform settings** holds safe organization-level operational
+  defaults that owners may change without restarting containers.
+- Docker volumes hold runtime state; source control contains no registered
+  devices, telemetry, credentials, or generated certificates.
+
+See [On-premises administration](docs/ONPREM_ADMIN.md) for the complete
+boundary.
+
+## Documentation
+
+| Task | Guide |
+| --- | --- |
+| Launch and connect a physical device | [Run locally](docs/RUNNING_LOCALLY.md) |
+| Configure the deployment | [On-premises administration](docs/ONPREM_ADMIN.md) |
+| Configure remote SSH | [ShellHub integration](docs/SHELLHUB_INTEGRATION.md) |
+| Back up or restore state | [Backup and restore](docs/BACKUP_RESTORE.md) |
+| Understand the system | [System architecture](docs/SYSTEM_ARCHITECTURE.md) |
+| Review stored records | [Data model](docs/DATA_MODEL.md) |
+| Review security | [Threat model](docs/THREAT_MODEL.md) |
+| Check implemented and deferred work | [Implementation status](docs/IMPLEMENTATION_STATUS.md) |
+
+## Development Check
+
+From the repository root:
+
+~~~bash
+docker build -f cloud-infra/deploy/compose/service.Dockerfile --target test cloud-infra
+docker compose -f cloud-infra/compose.yaml config
+~~~
+
+Soul Room is an implemented MVP foundation. Review the implementation status
+and threat model before treating it as production-ready infrastructure.

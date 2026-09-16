@@ -26,3 +26,39 @@ func TestParsePackages(t *testing.T) {
 		t.Fatalf("unexpected packages: %#v", packages)
 	}
 }
+
+func TestParseUbuntuOSRelease(t *testing.T) {
+	release := parseOSRelease(`PRETTY_NAME="Ubuntu 25.04"
+NAME="Ubuntu"
+VERSION_ID="25.04"
+ID=ubuntu`)
+	if got := osDisplayName(release); got != "Ubuntu 25.04" {
+		t.Fatalf("unexpected display name %q", got)
+	}
+	if release["ID"] != "ubuntu" || release["VERSION_ID"] != "25.04" {
+		t.Fatalf("unexpected Ubuntu release: %#v", release)
+	}
+}
+
+func TestParseYoctoOSRelease(t *testing.T) {
+	release := parseOSRelease(`ID=poky
+NAME="Poky (Yocto Project Reference Distro)"
+VERSION="5.0.6 (scarthgap)"
+VERSION_ID="5.0.6"
+BUILD_ID="factory-2026.09"`)
+	if got := osDisplayName(release); got != "Poky (Yocto Project Reference Distro) 5.0.6 (scarthgap)" {
+		t.Fatalf("unexpected display name %q", got)
+	}
+	if release["BUILD_ID"] != "factory-2026.09" {
+		t.Fatalf("unexpected Yocto build ID: %#v", release)
+	}
+}
+
+func TestParseARMCPUModel(t *testing.T) {
+	if got := parseLSCPUModel("Architecture: aarch64\nModel name: Cortex-A76\n"); got != "Cortex-A76" {
+		t.Fatalf("unexpected lscpu model %q", got)
+	}
+	if got := parseCPUModel("processor: 0\nmodel name: Intel(R) Test CPU\n"); got != "Intel(R) Test CPU" {
+		t.Fatalf("unexpected cpuinfo model %q", got)
+	}
+}

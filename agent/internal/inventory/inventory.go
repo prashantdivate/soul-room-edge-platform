@@ -26,6 +26,9 @@ type Inventory struct {
 	Hostname          string             `json:"hostname"`
 	Architecture      string             `json:"architecture"`
 	OS                string             `json:"os"`
+	OSID              string             `json:"os_id,omitempty"`
+	OSVersion         string             `json:"os_version,omitempty"`
+	OSBuild           string             `json:"os_build,omitempty"`
 	Kernel            string             `json:"kernel"`
 	OSRelease         map[string]string  `json:"os_release"`
 	HardwareModel     string             `json:"hardware_model"`
@@ -51,7 +54,10 @@ func CollectWithPluginDir(id identity.Identity, version, pluginDir string) Inven
 		DeviceID:          id.DeviceID,
 		Hostname:          hostname,
 		Architecture:      runtime.GOARCH,
-		OS:                first(release["PRETTY_NAME"], release["NAME"], runtime.GOOS),
+		OS:                osDisplayName(release),
+		OSID:              first(release["ID"], runtime.GOOS),
+		OSVersion:         first(release["VERSION_ID"], release["VERSION"]),
+		OSBuild:           release["BUILD_ID"],
 		Kernel:            readTrim("/proc/sys/kernel/osrelease"),
 		OSRelease:         release,
 		HardwareModel:     hardwareModel(),
@@ -134,18 +140,40 @@ func readTrim(path string) string {
 }
 
 func osRelease() map[string]string {
-	out := map[string]string{}
-	b, err := os.ReadFile("/etc/os-release")
-	if err != nil {
-		return out
+	for _, path := range []string{"/etc/os-release", "/usr/lib/os-release"} {
+		b, err := os.ReadFile(path)
+		if err == nil {
+			return parseOSRelease(string(b))
+		}
 	}
-	for _, line := range strings.Split(string(b), "\n") {
+	return map[string]string{}
+}
+
+func parseOSRelease(contents string) map[string]string {
+	out := map[string]string{}
+	for _, line := range strings.Split(contents, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
 		key, value, ok := strings.Cut(line, "=")
 		if ok {
-			out[key] = strings.Trim(value, `"`)
+			out[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), `"'`)
 		}
 	}
 	return out
+}
+
+func osDisplayName(release map[string]string) string {
+	if pretty := strings.TrimSpace(release["PRETTY_NAME"]); pretty != "" {
+		return pretty
+	}
+	name := first(release["NAME"], release["ID"], runtime.GOOS)
+	version := first(release["VERSION"], release["VERSION_ID"])
+	if version == "unknown" || strings.Contains(strings.ToLower(name), strings.ToLower(version)) {
+		return name
+	}
+	return strings.TrimSpace(name + " " + version)
 }
 
 func hardwareModel() string {
@@ -175,13 +203,47 @@ func serialNumber() string {
 
 func cpuModel() string {
 	b, _ := os.ReadFile("/proc/cpuinfo")
-	for _, line := range strings.Split(string(b), "\n") {
+	if value := parseCPUModel(string(b)); value != "" {
+		return value
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if output, err := exec.CommandContext(ctx, "lscpu").Output(); err == nil {
+		if value := parseLSCPUModel(string(output)); value != "" {
+			return value
+		}
+	}
+	if compatible, err := os.ReadFile("/proc/device-tree/compatible"); err == nil {
+		values := strings.FieldsFunc(string(compatible), func(r rune) bool { return r == 0 })
+		for index := len(values) - 1; index >= 0; index-- {
+			if _, value, ok := strings.Cut(values[index], ","); ok && value != "" {
+				return strings.ToUpper(value)
+			}
+		}
+	}
+	return hardwareModel()
+}
+
+func parseCPUModel(contents string) string {
+	for _, line := range strings.Split(contents, "\n") {
 		key, value, ok := strings.Cut(line, ":")
 		if ok && (strings.EqualFold(strings.TrimSpace(key), "model name") || strings.EqualFold(strings.TrimSpace(key), "hardware")) {
+			if value = strings.TrimSpace(value); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func parseLSCPUModel(contents string) string {
+	for _, line := range strings.Split(contents, "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if ok && strings.EqualFold(strings.TrimSpace(key), "model name") {
 			return strings.TrimSpace(value)
 		}
 	}
-	return "unknown"
+	return ""
 }
 
 func memoryTotal() uint64 {

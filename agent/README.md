@@ -1,71 +1,241 @@
 # Soul Room Edge Agent
 
-Open-source Linux edge-device management agent for gateways, industrial PCs,
-embedded Linux devices, and downstream controller fleets.
+The Soul Room agent connects a Linux device to the Soul Room control plane. It
+collects real inventory and telemetry, maintains device identity, buffers data
+while offline, receives validated jobs, and drives only the update mechanisms
+that are installed and configured on that device.
 
-The agent supports secure local identity creation, development enrollment,
-validated outbound HTTPS, heartbeat and telemetry reporting, bounded durable
-offline buffering, typed jobs, safe file deployment, Docker policy validation,
-transactional Mender, RAUC, OSTree, SWUpdate and Flatpak update adapters, an
-extensible local OTA plugin interface, and gateway connectors for simulated and read-only
-Modbus TCP devices.
+It is distribution-neutral Linux software. The same agent code runs on Ubuntu,
+Debian, Raspberry Pi OS, and Yocto-based images; choose the binary for the
+device CPU and integrate it with the device's service manager.
 
-## Quick Start
+## Before You Start
 
-```text
+You need:
+
+- a running Soul Room platform reachable from the device
+- a one-time token from **Management > Enrollment**
+- <code>soul-room-dev-ca.pem</code> downloaded from the same page
+- outbound device access to the Soul Room gateway, normally TCP port 8443
+- root access for the packaged installer
+
+Docker is needed only on the build computer. It is not required on the device
+to run the agent.
+
+## Build The Agent
+
+Run <code>uname -m</code> on the target device:
+
+| Device output | Docker target | Typical devices |
+| --- | --- | --- |
+| <code>x86_64</code> | <code>embedded-linux-amd64</code> | x86-64 PC, VM, industrial PC |
+| <code>aarch64</code> or <code>arm64</code> | <code>embedded-linux-arm64</code> | 64-bit Raspberry Pi, i.MX8MP |
+| <code>armv7l</code> or <code>armv7</code> | <code>embedded-linux-armv7</code> | 32-bit ARMv7 boards |
+
+From the <code>agent</code> directory, first run the tests and then export the
+bundle you need:
+
+~~~bash
 docker build --target test .
-docker build --target embedded-linux-arm64 --output type=local,dest=dist/embedded-linux-arm64 .
-docker build --target embedded-linux-armv7 --output type=local,dest=dist/embedded-linux-armv7 .
-```
 
-See `docs/EMBEDDED_LINUX_INSTALLATION.md` for installation and enrollment on
-64-bit or 32-bit ARM devices.
+# x86-64
+docker build --target embedded-linux-amd64 \
+  --output type=local,dest=dist/embedded-linux-amd64 .
 
-## Device Updates
+# 64-bit ARM
+docker build --target embedded-linux-arm64 \
+  --output type=local,dest=dist/embedded-linux-arm64 .
 
-The agent reports only update mechanisms installed on the device. All update
-mechanisms share signed artifact verification, compatibility checks, durable
-phase state, reboot recovery, health confirmation and rollback handling. See
-`docs/OTA_ADAPTERS.md` for device prerequisites, release signing, and the custom
-adapter contract.
+# 32-bit ARMv7
+docker build --target embedded-linux-armv7 \
+  --output type=local,dest=dist/embedded-linux-armv7 .
+~~~
 
-### Flatpak Applications
+To export every supported architecture on Linux or WSL, run
+<code>make bundle</code>. Each output directory is self-contained:
 
-Install Flatpak on the device. A campaign can use an existing system remote or
-an HTTPS `.flatpakrepo` descriptor from a self-hosted repository. The next
-inventory report adds the `ota:flatpak` capability automatically. Soul Room preserves
-GPG verification and runs only validated `flatpak update --system` jobs;
-arbitrary command text is rejected. The packaged systemd unit does not create
-or require a dedicated Linux user.
+~~~text
+edge-agent
+edge-agentctl
+config.yaml
+edge-agent.service
+install.sh
+~~~
 
-## Optional Package Advisory Scans
+The binaries are statically compiled with <code>CGO_ENABLED=0</code>; Go is not
+required on the target.
 
-The agent reports installed Debian or RPM packages. When Trivy is installed it
-also reports `security:trivy`, enabling an operator to queue an OS-package
-advisory scan from the Applications page. Scanner findings are returned as job
-evidence and are not converted into an invented production-readiness score.
+## Deploy And Enroll
 
-For a full overview, see:
+Copy the matching bundle and <code>soul-room-dev-ca.pem</code> to a temporary
+directory on the device. <code>/opt/soul-room-agent</code> is a convenient
+staging path:
 
-* `docs/IMPLEMENTATION_PLAN.md`
-* `docs/ARCHITECTURE.md`
-* `docs/IMPLEMENTATION_STATUS.md`
-* `docs/THREAT_MODEL.md`
+~~~bash
+cd /opt/soul-room-agent
+sudo sh install.sh \
+  --endpoint https://SOUL_ROOM_HOST:8443 \
+  --ca ./soul-room-dev-ca.pem \
+  --token ONE_TIME_TOKEN \
+  --name DEVICE_NAME
+~~~
+
+Replace <code>SOUL_ROOM_HOST</code> with the DNS name or IP address shown on
+the Enrollment page. It must be reachable from the device and covered by the
+downloaded CA certificate. The token can be used only once.
+
+The installer:
+
+1. validates the bundle and HTTPS endpoint
+2. installs the binaries, CA, configuration, and systemd unit
+3. preserves an existing identity under <code>/var/lib/edge-agent/identity</code>
+4. enrolls the device when a token is supplied
+5. enables and starts <code>edge-agent</code> on a systemd device
+
+It does not create a separate Linux user. The hardened service runs in the
+system service context. On a non-systemd image, use the same binaries and
+configuration but add the process to that image's init system. Yocto users can
+start with the supplied BitBake recipe.
+
+## Verify The Device
+
+~~~bash
+sudo edge-agentctl -config /etc/edge-agent/config.yaml status
+sudo systemctl status edge-agent
+sudo journalctl -u edge-agent -f
+~~~
+
+<code>status</code> checks the saved identity, local queue, TLS connection, and
+whether the device still exists in Soul Room. A successful result reports
+<code>"status": "connected"</code>. The device then appears under
+**Fleet > Devices** after its first heartbeat.
+
+Useful checks:
+
+~~~bash
+sudo edge-agentctl -config /etc/edge-agent/config.yaml config validate
+sudo edge-agentctl -config /etc/edge-agent/config.yaml telemetry collect
+sudo edge-agentctl -config /etc/edge-agent/config.yaml queue status
+sudo edge-agentctl -config /etc/edge-agent/config.yaml identity show
+sudo edge-agentctl -config /etc/edge-agent/config.yaml diagnostics create
+sudo edge-agentctl version
+~~~
+
+<code>identity show</code> redacts certificates. Do not copy or commit
+<code>/var/lib/edge-agent/identity</code>; it contains device-specific private
+identity.
+
+## Configure With The TUI
+
+Open the terminal configuration editor:
+
+~~~bash
+sudo edge-agentctl -config /etc/edge-agent/config.yaml tui
+~~~
+
+The TUI edits six sections:
+
+| Section | Settings |
+| --- | --- |
+| Server and trust | Gateway endpoint, CA path, connection timeout |
+| Identity and storage | Identity path, TPM flag, offline queue size and age |
+| Telemetry | Reporting interval, jitter, and individual collectors |
+| Jobs and containers | Concurrency, timeout, shell policy, container provider |
+| Gateway and location | Downstream connectors and <code>disabled</code>, <code>static</code>, <code>gpsd</code>, or <code>ip</code> location |
+| OTA updates | Product compatibility, staging, trusted keys, limits, health check, reboot policy |
+
+Press Enter to keep the displayed value. Enter <code>-</code> to clear an
+optional text value. Durations use forms such as <code>30s</code>,
+<code>10m</code>, or <code>2h</code>.
+
+Choose **0 Save and exit** when finished. The TUI validates the complete
+configuration and atomically writes <code>/etc/edge-agent/config.yaml</code>.
+It does not restart a running service automatically, so apply the saved values
+with:
+
+~~~bash
+sudo systemctl restart edge-agent
+sudo edge-agentctl -config /etc/edge-agent/config.yaml status
+~~~
+
+Location is disabled by default. For a fixed device, select
+<code>static</code> and enter latitude, longitude, and a label. Use
+<code>gpsd</code> for mobile hardware with GPSD, or <code>ip</code> only when
+an approximate third-party network lookup is acceptable.
+
+## Runtime Paths
+
+| Path | Purpose |
+| --- | --- |
+| <code>/usr/bin/edge-agent</code> | Long-running agent |
+| <code>/usr/bin/edge-agentctl</code> | Enrollment, status, diagnostics, and TUI |
+| <code>/etc/edge-agent/config.yaml</code> | Device configuration |
+| <code>/etc/edge-agent/ca.pem</code> | Soul Room gateway CA |
+| <code>/var/lib/edge-agent/identity</code> | Device key, certificate, and enrollment identity |
+| <code>/var/lib/edge-agent</code> | Queue, OTA state, and diagnostics |
+| <code>/usr/libexec/edge-agent/ota</code> | Optional custom OTA adapters |
+
+The agent reads distribution details from <code>/etc/os-release</code>,
+falling back to <code>/usr/lib/os-release</code>, and reads architecture and
+kernel information from the running system. Ubuntu and Yocto therefore follow
+the same reporting protocol; Yocto-specific <code>BUILD_ID</code> values are
+reported when the image provides them.
+
+## Updates And Optional Features
+
+The agent advertises an OTA capability only when its updater is installed.
+Mender, RAUC, OSTree, SWUpdate, and Flatpak still require correct device-side
+storage, bootloader, signing trust, health confirmation, and rollback setup.
+See [OTA adapters](docs/OTA_ADAPTERS.md) before enabling production updates.
+
+Installed Debian and RPM packages are reported as inventory. Installing Trivy
+adds the <code>security:trivy</code> capability and allows an operator to
+request an on-demand OS-package advisory scan.
+
+Remote SSH is intentionally separate. The agent never accepts arbitrary shell
+commands; install the ShellHub agent only on devices where audited interactive
+maintenance is allowed.
+
+## Upgrade An Existing Agent
+
+Run the matching new bundle's <code>install.sh</code> without a token to
+replace the binaries and service while preserving the existing configuration
+and identity:
+
+~~~bash
+sudo sh install.sh \
+  --endpoint https://SOUL_ROOM_HOST:8443 \
+  --ca ./soul-room-dev-ca.pem
+~~~
+
+Verify <code>status</code> after every upgrade. Preserve
+<code>/var/lib/edge-agent</code> across read-only root filesystem updates and
+A/B OS deployments.
+
+## Documentation
+
+| Task | Guide |
+| --- | --- |
+| Full Linux installation details | [Embedded Linux installation](docs/EMBEDDED_LINUX_INSTALLATION.md) |
+| Ubuntu and Debian | [Debian installation](docs/DEBIAN_INSTALLATION.md) |
+| Yocto image integration | [Yocto integration](docs/YOCTO_INTEGRATION.md) |
+| i.MX8MP example | [Running on Yocto i.MX8MP](docs/RUNNING_ON_YOCTO_IMX8MP.md) |
+| OTA prerequisites and custom adapters | [OTA adapters](docs/OTA_ADAPTERS.md) |
+| Enrollment and connection failures | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| Agent design | [Architecture](docs/ARCHITECTURE.md) |
+| Security assumptions | [Threat model](docs/THREAT_MODEL.md) |
+| Implemented and deferred work | [Implementation status](docs/IMPLEMENTATION_STATUS.md) |
 
 ## Security Defaults
 
-* Device keys are generated locally and never sent to the server.
-* TLS server certificates are validated.
-* Production enrollment requires signed server responses.
-* Shell execution is not part of the fleet protocol; optional remote access is
-  isolated in the separately installed ShellHub agent.
-* Jobs are typed, validated, scoped, time-limited, and persisted for idempotency.
-* File deployment uses destination allowlists, size limits, checksums, staging,
+- Device keys are generated locally and never sent to the server.
+- TLS server certificates are validated.
+- Jobs are typed, scoped, time-limited, and persisted for idempotency.
+- Arbitrary remote shell is not part of the fleet protocol.
+- File deployment uses destination allowlists, size limits, checksums, staging,
   and atomic rename where possible.
-* Downstream connectors are read-only by default.
+- Downstream connectors are read-only by default.
 
-## Current Scope
-
-This repository is an implemented MVP foundation, not a claim of final
-commercial production readiness. See `docs/IMPLEMENTATION_STATUS.md` for the
-implemented/deferred matrix.
+Soul Room is an implemented MVP foundation, not a claim of audited commercial
+production readiness. Qualify update, rollback, power-loss, network-loss, and
+recovery behavior on each supported hardware and image combination.

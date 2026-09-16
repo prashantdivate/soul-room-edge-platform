@@ -1,122 +1,149 @@
-# Run the Platform Locally
+# Run The Platform Locally
 
-The local workflow is the same on Windows, Linux, and macOS. It requires only
-Docker Desktop or Docker Engine with the Compose plugin.
+The supported local workflow is the same on Windows, Linux, macOS, and WSL. It
+requires Docker Desktop, or Docker Engine with Docker Compose v2.
 
-## Start
+## First Start
 
-Open the VS Code terminal at the repository root, then run:
+Run all commands in this section from the repository root.
 
-```text
+Create the local environment file:
+
+~~~bash
+# Linux, macOS, or WSL
+cp cloud-infra/.env.example cloud-infra/.env
+~~~
+
+~~~powershell
+# Windows PowerShell
+Copy-Item cloud-infra\.env.example cloud-infra\.env
+~~~
+
+Edit <code>cloud-infra/.env</code> before starting. At minimum, choose the
+company identity and first organization owner:
+
+~~~dotenv
+SOULROOM_ORGANIZATION_NAME=Your Company
+SOULROOM_ORGANIZATION_SLUG=your-company
+SOULROOM_ADMIN_EMAIL=owner@your-company.com
+SOULROOM_ADMIN_PASSWORD=choose-a-unique-password-with-12-or-more-characters
+~~~
+
+The values above are examples. Soul Room does not publish a shared default
+login. On a clean data volume, it creates the owner from the exact values in
+your <code>.env</code>. On an existing volume, the original account remains in
+effect and bootstrap values are not reapplied.
+
+Build and start the complete stack:
+
+~~~bash
+# Linux, macOS, or WSL
 ./platform.sh build
-# Windows Command Prompt or PowerShell: platform.cmd build
-```
+~~~
 
-After the images exist, use `./platform.sh up` or `platform.cmd up` for a fast
-start without rebuilding.
+~~~bat
+:: Windows Command Prompt or PowerShell
+platform.cmd build
+~~~
 
-Copy `.env.example` to `.env` and set the company and initial owner values:
+Open [http://localhost:3080](http://localhost:3080) and sign in with the owner
+configured before the first start.
 
-```dotenv
-SOULROOM_ORGANIZATION_NAME=Acme Devices
-SOULROOM_ORGANIZATION_SLUG=acme-devices
-SOULROOM_ADMIN_EMAIL=admin@acme.com
-SOULROOM_ADMIN_PASSWORD=replace-with-a-long-unique-password
-SOULROOM_SHELLHUB_DOMAIN=localhost
-SOULROOM_SHELLHUB_URL=http://localhost:8088
-SOULROOM_SHELLHUB_POSTGRES_PASSWORD=replace-with-a-long-unique-password
-```
+## Later Starts
 
-Open `http://localhost:3080` and sign in with that owner account. These values
-are used only when the data volume is empty; normal restarts never reset the
-owner password.
+Use the repository launcher instead of remembering Compose arguments:
 
-Compose starts the web console, combined control-plane service, and the pinned
-ShellHub Community Edition stack. Soul Room's current durable store lives in
-the `app-data` volume, so unused PostgreSQL, MinIO, and Mailpit containers are
-not part of the default local stack. On the first run it creates only the Soul
-Room administrator and organization. ShellHub uses
-its own security boundary and asks you to create its administrator and namespace
-at `http://localhost:8088/setup`. Devices and fleet activity appear only after
-a real agent enrolls.
-
-## Stop
-
-```text
-docker compose down
-```
-
-Your local data remains in Docker volumes. To view service output:
-
-```text
-docker compose logs -f
-```
-
-## Backup and Restore
-
-Create a timestamped local backup set in `cloud-infra/backups`:
-
-```text
-docker compose --profile maintenance run --rm backup
-```
-
-The backup includes Soul Room state, ShellHub PostgreSQL records, and ShellHub
-signing keys. The command prints the backup-set timestamp. Restore
-that set with the same command on Windows, Linux, or macOS:
-
-```text
-docker compose --profile maintenance run --rm -e BACKUP_SET=YYYYmmddHHMMSS restore
-```
-
-Use a maintenance window for restore and validate login, enrollment, telemetry,
-and audit history afterward.
+| Action | Linux, macOS, WSL | Windows |
+| --- | --- | --- |
+| Start existing images | <code>./platform.sh up</code> | <code>platform.cmd up</code> |
+| Rebuild after source changes | <code>./platform.sh refresh</code> | <code>platform.cmd refresh</code> |
+| Stop and retain data | <code>./platform.sh down</code> | <code>platform.cmd down</code> |
+| Show service state | <code>./platform.sh status</code> | <code>platform.cmd status</code> |
+| Follow logs | <code>./platform.sh logs</code> | <code>platform.cmd logs</code> |
+| Validate Docker and Compose | <code>./platform.sh doctor</code> | <code>platform.cmd doctor</code> |
 
 ## Local Addresses
 
-| Service | Address |
+| Service | Default address |
 | --- | --- |
-| Web console | `http://localhost:3080` |
-| Control API | `http://localhost:8080` |
-| Device gateway | `https://localhost:8443` |
-| ShellHub portal | `http://localhost:8088` |
-| ShellHub SSH gateway | `localhost:22222` |
+| Soul Room console | <code>http://localhost:3080</code> |
+| Control API | <code>http://localhost:8080</code> |
+| Device gateway | <code>https://localhost:8443</code> |
+| ShellHub portal | <code>http://localhost:8088</code> |
+| ShellHub SSH gateway | <code>localhost:22222</code> |
 
-## Connect a Physical Device
+ShellHub performs a separate one-time setup for its administrator and first
+namespace. Those accounts are stored in the local ShellHub data volume, not in
+an external ShellHub cloud account.
 
-1. Open **Enrollment** in the web console.
-2. Generate a one-time token.
-3. Download the development CA from the same screen.
-4. Install the CA as `/etc/edge-agent/ca.pem` on the device.
-5. Set the agent endpoint to `https://<computer-ip>:8443`.
+## Connect A Physical Device
 
-Before starting Compose for a physical device, copy `.env.example` to `.env`
-and replace `localhost` with the IP address or DNS name the device uses to reach
-this computer:
+The device cannot use <code>localhost</code> to reach the computer running Soul
+Room. Before the platform generates its gateway certificate, set the address
+used by devices:
 
-```text
+~~~dotenv
 SOULROOM_DEVICE_PUBLIC_HOST=192.168.1.20
-SOULROOM_SHELLHUB_DOMAIN=localhost
 SOULROOM_SHELLHUB_URL=http://192.168.1.20:8088
-```
+~~~
 
-Docker Compose reads this file on Windows, Linux, and macOS. It ensures the
-gateway certificate matches the address used by the device.
+Use a stable LAN address or DNS name. Do not copy an address from a screenshot
+or hardcode another installation's host.
+
+Then:
+
+1. Start or refresh the platform.
+2. Open **Management > Enrollment**.
+3. Generate a one-time token.
+4. Download <code>soul-room-dev-ca.pem</code>.
+5. Build the agent bundle for the device CPU.
+6. Install it with endpoint <code>https://YOUR_HOST:8443</code>.
+7. Run <code>edge-agentctl status</code> on the device.
+
+The complete device commands are in the
+[agent README](../../agent/README.md) and
+[embedded Linux installation guide](../../agent/docs/EMBEDDED_LINUX_INSTALLATION.md).
 
 ## Initialize Remote Access
 
-1. Open **Remote access** and use the embedded portal, or open `http://localhost:8088/setup` directly, then create the ShellHub administrator.
-2. Create a ShellHub namespace and copy its tenant ID.
-3. Follow `SHELLHUB_INTEGRATION.md` to install the ShellHub agent on the device.
-4. Accept the pending device in ShellHub and copy its SSHID.
-5. Save that SSHID against the same device on Soul Room's **Remote access** page.
+Open **Operations > Remote access**. The ShellHub setup and console are
+embedded in that page and use the same browser host as Soul Room. Create the
+ShellHub administrator and namespace, then follow the
+[ShellHub integration guide](SHELLHUB_INTEGRATION.md) to connect a device.
 
-ShellHub keys and database records live in the `shellhub-keys` and
-`shellhub-postgres-data` named volumes. Normal rebuilds and `docker compose down`
-preserve them. `docker compose down -v` permanently removes both Soul Room and
-ShellHub local data.
+The Soul Room and ShellHub agents are separate. Install the ShellHub agent only
+on devices where interactive SSH is allowed.
 
-## Development Note
+## Persistence
 
-The platform and seed containers run as root only to initialize the local named
-volume. Production deployments should pre-create writable volumes and run the
-service as a non-root user.
+Normal starts, rebuilds, refreshes, and <code>down</code> preserve:
+
+- Soul Room users, devices, telemetry, jobs, events, and certificates
+- ShellHub users, namespaces, accepted devices, database records, and signing
+  keys
+
+See [Backup and restore](BACKUP_RESTORE.md) before upgrades or destructive
+maintenance.
+
+To erase a disposable local installation and initialize it again from the
+current <code>.env</code>:
+
+~~~bash
+docker compose -f cloud-infra/compose.yaml down -v
+docker compose -f cloud-infra/compose.yaml up --build -d
+~~~
+
+This permanently removes local accounts and fleet data. It is not a password
+reset procedure for a customer installation.
+
+## Troubleshooting
+
+~~~bash
+./platform.sh doctor
+./platform.sh status
+./platform.sh logs
+~~~
+
+On Windows, use the same commands through <code>platform.cmd</code>. For an
+agent that does not appear in the console, continue with
+[agent troubleshooting](../../agent/docs/TROUBLESHOOTING.md).

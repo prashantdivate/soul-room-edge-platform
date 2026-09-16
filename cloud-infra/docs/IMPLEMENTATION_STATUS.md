@@ -26,7 +26,12 @@
   JSON store avoid unused application PostgreSQL, MinIO, and Mailpit services;
   ShellHub retains its required database and coordination services.
 * Permission-aware navigation and data loading, remembered expandable sidebar,
-  Ctrl/Cmd+K page search, and lazy-loaded fleet mapping.
+  focus-scoped Ctrl/Cmd+K page search, and lazy-loaded fleet mapping rendered
+  by MapLibre GL with modern OpenStreetMap vector data.
+* Package inventory with official project artwork where available and a clear
+  system-package fallback for packages without published artwork. Advisory
+  scanning includes in-product setup, verification, and air-gap instructions.
+  Device resource charts preserve precision and use independent scales.
 * Capability-gated OTA campaigns for Mender, RAUC, OSTree, SWUpdate, Flatpak,
   and device-provided adapter plugins, with pilot-first delivery, explicit
   promotion, signed release metadata, and rebooting job state. OSTree campaigns

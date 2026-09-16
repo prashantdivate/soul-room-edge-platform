@@ -43,3 +43,38 @@ func TestRejectHTTP(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 }
+
+func TestSaveRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	cfg := Default()
+	cfg.Server.Endpoint = "https://fleet.example.test:8443"
+	cfg.Server.CAFile = "/etc/edge-agent/ca.pem"
+	cfg.Location.Source = "static"
+	cfg.Location.Latitude = 18.5204
+	cfg.Location.Longitude = 73.8567
+	cfg.Location.Label = "Pune lab"
+	cfg.Location.IPURL = "https://location.example.test/"
+	cfg.OTA.Product = "imx8mp-kiosk"
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Server.Endpoint != cfg.Server.Endpoint || loaded.Location.Label != cfg.Location.Label || loaded.Location.IPURL != cfg.Location.IPURL || loaded.OTA.Product != cfg.OTA.Product {
+		t.Fatalf("saved config did not round trip: %+v", loaded)
+	}
+}
+
+func TestValidateIPLocation(t *testing.T) {
+	cfg := Default()
+	cfg.Location.Source = "ip"
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Location.IPURL = "http://location.example.test"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected insecure IP location URL to be rejected")
+	}
+}

@@ -37,6 +37,7 @@ location:
   longitude: 0
   label: ""
   gpsd_address: 127.0.0.1:2947
+  ip_url: https://ipwho.is/
 ota:
   enabled: true
   product: embedded-linux

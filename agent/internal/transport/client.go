@@ -31,15 +31,15 @@ func New(cfg config.Config, id identity.Identity) (*Client, error) {
 	if err != nil {
 		pool = x509.NewCertPool()
 	}
-	caFile := cfg.Server.CAFile
-	if caFile == "" {
-		caFile = cfg.Identity.StateDir + "/ca.pem"
-	}
-	if caFile != "" {
-		ca, err := os.ReadFile(caFile)
-		if err == nil {
-			pool.AppendCertsFromPEM(ca)
+	caPEM := []byte(id.CAPEM)
+	if len(caPEM) == 0 && cfg.Server.CAFile != "" {
+		caPEM, err = os.ReadFile(cfg.Server.CAFile)
+		if err != nil {
+			return nil, fmt.Errorf("read server CA %s: %w", cfg.Server.CAFile, err)
 		}
+	}
+	if len(caPEM) > 0 && !pool.AppendCertsFromPEM(caPEM) {
+		return nil, fmt.Errorf("server CA is not a valid PEM certificate")
 	}
 	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool}
 	if id.CertificatePEM != "" {
@@ -61,6 +61,19 @@ func New(cfg config.Config, id identity.Identity) (*Client, error) {
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
 		},
 	}, nil
+}
+
+func (c *Client) Status(ctx context.Context) error {
+	var response struct {
+		Status string `json:"status"`
+	}
+	if err := c.GetDeviceJSON(ctx, "/v1/status", &response); err != nil {
+		return err
+	}
+	if response.Status != "accepted" {
+		return fmt.Errorf("unexpected device status %q", response.Status)
+	}
+	return nil
 }
 
 func (c *Client) PostEnvelope(ctx context.Context, path, schema string, payload any) ([]byte, error) {

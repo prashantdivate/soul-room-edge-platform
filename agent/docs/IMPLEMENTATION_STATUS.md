@@ -6,9 +6,11 @@
 * Config defaults and validation.
 * File-backed device identity with Ed25519 keys and restrictive permissions.
 * Development enrollment against `cmd/device-simulator`.
-* HTTPS transport with TLS validation, message envelopes, sequence numbers,
-  timestamps, and exponential backoff with jitter.
-* Heartbeat, inventory, and telemetry collection.
+* HTTPS transport with TLS validation, enrolled-CA precedence, message
+  envelopes, sequence numbers, timestamps, and exponential backoff with jitter.
+* Heartbeat, inventory, and telemetry collection, including standard Ubuntu,
+  Debian, and Yocto `/etc/os-release` identity/version/build fields, ARM CPU
+  model fallback, GPSD/static location, and opt-in approximate IP location.
 * Bounded durable queue with priority-aware drops and age pruning.
 * Typed job framework with validation, expiry, idempotency, result persistence,
   bounded output, timeouts, and handlers.
@@ -24,8 +26,11 @@
   preconfigured HTTPS/GPG-verified remotes, followed by exact boot confirmation.
 * Gateway downstream model, simulator connector, and read-only Modbus TCP
   connector.
-* CLI commands for status, identity, enrollment, config validation, telemetry,
-  queue, jobs, connectors, diagnostics, and version.
+* CLI commands for connected registration status, identity, enrollment, config
+  validation, an atomic configuration TUI, telemetry, queue, jobs, connectors,
+  diagnostics, and version.
+* Docker-built amd64, arm64, and ARMv7 installation bundles with a single
+  systemd-aware installer that runs under the device's existing system context.
 
 ## Deferred
 

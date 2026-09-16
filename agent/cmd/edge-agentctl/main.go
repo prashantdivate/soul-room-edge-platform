@@ -12,11 +12,13 @@ import (
 
 	"github.com/soul-room/edge-agent/internal/agent"
 	"github.com/soul-room/edge-agent/internal/config"
+	"github.com/soul-room/edge-agent/internal/configtui"
 	"github.com/soul-room/edge-agent/internal/diagnostics"
 	"github.com/soul-room/edge-agent/internal/enrollment"
 	"github.com/soul-room/edge-agent/internal/identity"
 	"github.com/soul-room/edge-agent/internal/storage"
 	"github.com/soul-room/edge-agent/internal/telemetry"
+	"github.com/soul-room/edge-agent/internal/transport"
 )
 
 func main() {
@@ -41,6 +43,8 @@ func main() {
 			usage()
 		}
 		printOut(jsonOut, map[string]string{"status": "valid"})
+	case "tui":
+		must(configtui.Run(cfgPath, cfg, os.Stdin, os.Stdout))
 	case "enroll":
 		enrollFlags := flag.NewFlagSet("enroll", flag.ExitOnError)
 		token := enrollFlags.String("token", "", "one-time enrollment token")
@@ -66,10 +70,29 @@ func main() {
 		id.CAPEM = "<redacted>"
 		printOut(jsonOut, id)
 	case "status":
-		id, _ := identity.LoadIdentity(cfg.Identity.StateDir)
-		st, _ := storage.Open(cfg.Storage.StateDir, cfg.Storage.MaxQueueBytes, cfg.Storage.MaxQueueAge)
-		stats, _ := st.Stats()
-		printOut(jsonOut, map[string]any{"version": agent.Version, "device_id": id.DeviceID, "tenant_id": id.TenantID, "queue": stats})
+		id, identityErr := identity.LoadIdentity(cfg.Identity.StateDir)
+		st, err := storage.Open(cfg.Storage.StateDir, cfg.Storage.MaxQueueBytes, cfg.Storage.MaxQueueAge)
+		must(err)
+		stats, err := st.Stats()
+		must(err)
+		connection := map[string]any{"status": "not_enrolled"}
+		if identityErr == nil {
+			connection["status"] = "unreachable"
+			client, err := transport.New(cfg, id)
+			if err == nil {
+				ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ConnectTimeout)
+				err = client.Status(ctx)
+				cancel()
+			}
+			if err == nil {
+				connection["status"] = "connected"
+			} else {
+				connection["error"] = err.Error()
+			}
+		} else {
+			connection["error"] = identityErr.Error()
+		}
+		printOut(jsonOut, map[string]any{"version": agent.Version, "device_id": id.DeviceID, "tenant_id": id.TenantID, "endpoint": cfg.Server.Endpoint, "connection": connection, "queue": stats})
 	case "telemetry":
 		if flag.Arg(1) != "collect" {
 			usage()
@@ -78,14 +101,20 @@ func main() {
 		defer cancel()
 		printOut(jsonOut, telemetry.CollectAll(ctx, []telemetry.Collector{telemetry.BasicCollector{}}))
 	case "queue":
-		if flag.Arg(1) != "status" {
+		if flag.Arg(1) != "status" && flag.Arg(1) != "archive" {
 			usage()
 		}
 		st, err := storage.Open(cfg.Storage.StateDir, cfg.Storage.MaxQueueBytes, cfg.Storage.MaxQueueAge)
 		must(err)
-		stats, err := st.Stats()
-		must(err)
-		printOut(jsonOut, stats)
+		if flag.Arg(1) == "archive" {
+			path, err := st.ArchiveQueue()
+			must(err)
+			printOut(jsonOut, map[string]string{"archived_queue": path})
+		} else {
+			stats, err := st.Stats()
+			must(err)
+			printOut(jsonOut, stats)
+		}
 	case "jobs":
 		if flag.Arg(1) != "list" {
 			usage()
@@ -127,6 +156,6 @@ func must(err error) {
 }
 
 func usage() {
-	fmt.Println("edge-agentctl [-config PATH] enroll -token TOKEN [-name NAME] | status | identity show | config validate | telemetry collect | queue status | diagnostics create | version")
+	fmt.Println("edge-agentctl [-config PATH] tui | enroll -token TOKEN [-name NAME] | status | identity show | config validate | telemetry collect | queue status|archive | diagnostics create | version")
 	os.Exit(2)
 }

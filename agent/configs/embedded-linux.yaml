@@ -1,5 +1,6 @@
 version: 1
 server:
+  # install.sh replaces this required placeholder with --endpoint.
   endpoint: https://device-gateway.example.com:8443
   ca_file: /etc/edge-agent/ca.pem
   connect_timeout: 15s
@@ -37,6 +38,7 @@ location:
   longitude: 0
   label: ""
   gpsd_address: 127.0.0.1:2947
+  ip_url: https://ipwho.is/
 ota:
   enabled: true
   product: embedded-linux

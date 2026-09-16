@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +69,7 @@ type LocationConfig struct {
 	Longitude   float64
 	Label       string
 	GPSDAddress string
+	IPURL       string
 }
 
 type OTAConfig struct {
@@ -120,7 +123,7 @@ func Default() Config {
 			Enabled:      true,
 			ConnectorDir: "/etc/edge-agent/connectors.d",
 		},
-		Location: LocationConfig{Source: "disabled", GPSDAddress: "127.0.0.1:2947"},
+		Location: LocationConfig{Source: "disabled", GPSDAddress: "127.0.0.1:2947", IPURL: "https://ipwho.is/"},
 		OTA: OTAConfig{
 			Enabled:          true,
 			StateDir:         "/var/lib/edge-agent/ota",
@@ -180,6 +183,68 @@ func Load(path string) (Config, error) {
 		return cfg, err
 	}
 	return cfg, cfg.Validate()
+}
+
+func Save(path string, cfg Config) error {
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	mode := os.FileMode(0640)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".edge-agent-config-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.WriteString(render(cfg)); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
+func render(cfg Config) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "version: %d\n", cfg.Version)
+	fmt.Fprintf(&out, "server:\n  endpoint: %s\n  ca_file: %s\n  connect_timeout: %s\n", cfg.Server.Endpoint, cfg.Server.CAFile, cfg.Server.ConnectTimeout)
+	fmt.Fprintf(&out, "identity:\n  state_dir: %s\n  use_tpm: %t\n", cfg.Identity.StateDir, cfg.Identity.UseTPM)
+	fmt.Fprintf(&out, "storage:\n  state_dir: %s\n  max_queue_bytes: %d\n  max_queue_age: %s\n", cfg.Storage.StateDir, cfg.Storage.MaxQueueBytes, cfg.Storage.MaxQueueAge)
+	fmt.Fprintf(&out, "telemetry:\n  interval: %s\n  jitter: %s\n  collectors:\n", cfg.Telemetry.Interval, cfg.Telemetry.Jitter)
+	collectorNames := make([]string, 0, len(cfg.Telemetry.Collectors))
+	for name := range cfg.Telemetry.Collectors {
+		collectorNames = append(collectorNames, name)
+	}
+	sort.Strings(collectorNames)
+	for _, name := range collectorNames {
+		fmt.Fprintf(&out, "    %s: %t\n", name, cfg.Telemetry.Collectors[name])
+	}
+	fmt.Fprintf(&out, "jobs:\n  max_concurrent: %d\n  default_timeout: %s\n  allow_shell: %t\n", cfg.Jobs.MaxConcurrent, cfg.Jobs.DefaultTimeout, cfg.Jobs.AllowShell)
+	fmt.Fprintf(&out, "containers:\n  provider: %s\n  socket: %s\n", cfg.Containers.Provider, cfg.Containers.Socket)
+	fmt.Fprintf(&out, "gateway:\n  enabled: %t\n  connector_dir: %s\n", cfg.Gateway.Enabled, cfg.Gateway.ConnectorDir)
+	fmt.Fprintf(&out, "location:\n  source: %s\n  latitude: %g\n  longitude: %g\n  label: %s\n  gpsd_address: %s\n  ip_url: %s\n", cfg.Location.Source, cfg.Location.Latitude, cfg.Location.Longitude, cfg.Location.Label, cfg.Location.GPSDAddress, cfg.Location.IPURL)
+	fmt.Fprintf(&out, "ota:\n  enabled: %t\n  product: %s\n  state_dir: %s\n  staging_dir: %s\n", cfg.OTA.Enabled, cfg.OTA.Product, cfg.OTA.StateDir, cfg.OTA.StagingDir)
+	fmt.Fprintf(&out, "  trusted_keys_dir: %s\n  plugin_dir: %s\n  max_artifact_bytes: %d\n", cfg.OTA.TrustedKeysDir, cfg.OTA.PluginDir, cfg.OTA.MaxArtifactBytes)
+	fmt.Fprintf(&out, "  min_free_bytes: %d\n  download_timeout: %s\n  health_timeout: %s\n", cfg.OTA.MinFreeBytes, cfg.OTA.DownloadTimeout, cfg.OTA.HealthTimeout)
+	fmt.Fprintf(&out, "  health_check_command: %s\n  auto_reboot: %t\n", cfg.OTA.HealthCheckCommand, cfg.OTA.AutoReboot)
+	return out.String()
 }
 
 func setValue(cfg *Config, section, key, value string) error {
@@ -298,6 +363,8 @@ func setValue(cfg *Config, section, key, value string) error {
 			cfg.Location.Label = value
 		case "gpsd_address":
 			cfg.Location.GPSDAddress = value
+		case "ip_url":
+			cfg.Location.IPURL = value
 		}
 	case "ota":
 		switch key {
@@ -375,11 +442,14 @@ func (c Config) Validate() error {
 	if c.Jobs.AllowShell {
 		return fmt.Errorf("jobs.allow_shell must remain false for production handler set")
 	}
-	if c.Location.Source != "disabled" && c.Location.Source != "static" && c.Location.Source != "gpsd" {
-		return fmt.Errorf("location.source must be disabled, static, or gpsd")
+	if c.Location.Source != "disabled" && c.Location.Source != "static" && c.Location.Source != "gpsd" && c.Location.Source != "ip" {
+		return fmt.Errorf("location.source must be disabled, static, gpsd, or ip")
 	}
 	if c.Location.Source == "static" && (c.Location.Latitude < -90 || c.Location.Latitude > 90 || c.Location.Longitude < -180 || c.Location.Longitude > 180) {
 		return fmt.Errorf("static location coordinates are invalid")
+	}
+	if c.Location.Source == "ip" && !strings.HasPrefix(c.Location.IPURL, "https://") {
+		return fmt.Errorf("location.ip_url must use https")
 	}
 	if c.OTA.Enabled {
 		if c.OTA.StateDir == "" || c.OTA.StagingDir == "" || c.OTA.TrustedKeysDir == "" || c.OTA.PluginDir == "" {

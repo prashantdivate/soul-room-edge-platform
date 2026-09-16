@@ -13,6 +13,7 @@ import (
 	devicelocation "github.com/soul-room/edge-agent/internal/location"
 	"github.com/soul-room/edge-agent/internal/observability"
 	"github.com/soul-room/edge-agent/internal/ota"
+	"github.com/soul-room/edge-agent/internal/protocol"
 	"github.com/soul-room/edge-agent/internal/storage"
 	"github.com/soul-room/edge-agent/internal/telemetry"
 	"github.com/soul-room/edge-agent/internal/transport"
@@ -27,6 +28,7 @@ type Agent struct {
 	Transport *transport.Client
 	Jobs      *jobs.Registry
 	OTA       *ota.Engine
+	location  *protocol.Location
 }
 
 func New(cfg config.Config) (*Agent, error) {
@@ -85,9 +87,16 @@ func (a *Agent) tick(ctx context.Context) error {
 	if err := a.flush(ctx); err != nil {
 		observability.Error("queue flush failed", "error", err)
 	}
-	location := devicelocation.Collect(ctx, devicelocation.Config{Source: a.Config.Location.Source, Latitude: a.Config.Location.Latitude, Longitude: a.Config.Location.Longitude, Label: a.Config.Location.Label, GPSDAddress: a.Config.Location.GPSDAddress})
+	location := a.location
+	if a.Config.Location.Source != "ip" || location == nil {
+		location = devicelocation.Collect(ctx, devicelocation.Config{Source: a.Config.Location.Source, Latitude: a.Config.Location.Latitude, Longitude: a.Config.Location.Longitude, Label: a.Config.Location.Label, GPSDAddress: a.Config.Location.GPSDAddress, IPURL: a.Config.Location.IPURL})
+		if a.Config.Location.Source == "ip" && location != nil {
+			a.location = location
+		}
+	}
 	hb := heartbeat.Collect(Version, location)
 	if _, err := a.Transport.PostEnvelope(ctx, "/v1/heartbeat", "heartbeat.v1", hb); err != nil {
+		observability.Error("heartbeat delivery failed; buffered for retry", "endpoint", a.Config.Server.Endpoint, "error", err)
 		return a.enqueue("heartbeat", storage.High, hb)
 	}
 	batch := telemetry.CollectAll(ctx, []telemetry.Collector{telemetry.BasicCollector{}})

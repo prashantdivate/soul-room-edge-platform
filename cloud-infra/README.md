@@ -9,8 +9,14 @@ including building and enrolling the edge agent.
 
 ## Start Locally
 
-From the repository root, create <code>cloud-infra/.env</code> from
-<code>cloud-infra/.env.example</code>. Choose your own organization name,
+The <code>.env</code> file is optional for a localhost-only evaluation. On a
+clean volume without owner values, the local fallback login is
+<code>admin@soulroom.local</code> with password
+<code>change-me-local</code>. Do not use that password on a LAN or
+internet-accessible installation.
+
+For normal use, create <code>cloud-infra/.env</code> from
+<code>cloud-infra/.env.example</code> and choose your own organization name,
 owner email, and owner password before the first start.
 
 ~~~bash
@@ -19,16 +25,16 @@ cp cloud-infra/.env.example cloud-infra/.env
 ./platform.sh build
 ~~~
 
-~~~bat
-:: Windows Command Prompt or PowerShell
-copy cloud-infra\.env.example cloud-infra\.env
+~~~powershell
+# Windows PowerShell
+Copy-Item -Path .\cloud-infra\.env.example -Destination .\cloud-infra\.env
 platform.cmd build
 ~~~
 
 Open [http://localhost:3080](http://localhost:3080).
 
-There is no shared login from this README. A new installation creates its first
-owner from <code>SOULROOM_ADMIN_EMAIL</code> and
+When configured, a new installation creates its first owner from
+<code>SOULROOM_ADMIN_EMAIL</code> and
 <code>SOULROOM_ADMIN_PASSWORD</code> in <code>.env</code>. An existing data
 volume keeps the account created during its first initialization; changing
 <code>.env</code> does not overwrite that account.

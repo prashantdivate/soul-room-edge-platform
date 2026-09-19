@@ -1,6 +1,5 @@
 <div align="center">
   <img src="./cloud-infra/web/public/soul-room-mark.png" width="220" alt="Soul Room logo">
-  <h1>Soul Room</h1>
   <p><strong>Manage Linux edge devices, gateways, software, and updates from one place.</strong></p>
 </div>
 
@@ -20,6 +19,10 @@ embedded Linux devices.
   <img src="./docs/assets/soul-room-login.png" alt="Soul Room login screen" width="100%">
 </p>
 
+<p align="center">
+  <img src="./docs/assets/device-health.png" alt="Soul Room device health tab" width="100%">
+</p>
+
 ## Quick Start
 
 ### 1. Prepare the installation
@@ -27,7 +30,18 @@ embedded Linux devices.
 Install Docker Desktop, or Docker Engine with Docker Compose v2. No local Go or
 Node.js installation is required to run the platform.
 
-Create your local configuration from the example file:
+For a quick localhost-only evaluation, the environment file is optional. If it
+is missing, or it does not define owner credentials, a clean installation uses:
+
+| Field | Local fallback |
+| --- | --- |
+| Email | <code>admin@soulroom.local</code> |
+| Password | <code>change-me-local</code> |
+
+These credentials are intentionally limited to development convenience. Do not
+expose the platform to a LAN or the internet with this password.
+
+For a normal installation, create your local configuration from the example:
 
 ```bash
 # Linux, macOS, or WSL
@@ -36,10 +50,13 @@ cp cloud-infra/.env.example cloud-infra/.env
 
 ```powershell
 # Windows PowerShell
-Copy-Item cloud-infra\.env.example cloud-infra\.env
+Copy-Item -Path .\cloud-infra\.env.example -Destination .\cloud-infra\.env
 ```
 
-Open `cloud-infra/.env` and choose the organization and first owner account:
+<code>Copy-Item</code> is the PowerShell copy command. The value after
+<code>-Path</code> is the supplied template; <code>-Destination</code> is the
+new private configuration file. Open <code>cloud-infra/.env</code> and choose
+the organization and first owner account:
 
 ```dotenv
 SOULROOM_ORGANIZATION_NAME=Your Company
@@ -48,9 +65,9 @@ SOULROOM_ADMIN_EMAIL=owner@your-company.com
 SOULROOM_ADMIN_PASSWORD=choose-a-unique-password-with-12-or-more-characters
 ```
 
-These are examples, not shared Soul Room credentials. For a physical device,
-also set `SOULROOM_DEVICE_PUBLIC_HOST` to the DNS name or LAN address that the
-device can reach. See [physical-device networking](./cloud-infra/docs/RUNNING_LOCALLY.md#connect-a-physical-device).
+For a physical device, also set `SOULROOM_DEVICE_PUBLIC_HOST` to the DNS name
+or LAN address that the device can reach. See
+[physical-device networking](./cloud-infra/docs/RUNNING_LOCALLY.md#connect-a-physical-device).
 
 ### 2. Build and start Soul Room
 
@@ -72,10 +89,9 @@ address.
 
 ### 3. Sign in
 
-Soul Room does **not** have a universal demo login.
-
 | Installation | Account to use |
 | --- | --- |
+| New volume without owner values in `.env` | `admin@soulroom.local` / `change-me-local` |
 | New, empty data volume | The exact `SOULROOM_ADMIN_EMAIL` and `SOULROOM_ADMIN_PASSWORD` values set in `cloud-infra/.env` before the first start |
 | Existing data volume | The account created when that volume was first initialized |
 | Normal rebuild or restart | The existing account; bootstrap values are not applied again |
@@ -139,6 +155,13 @@ docker build --target embedded-linux-armv7 --output type=local,dest=agent/dist/e
 
 Each output directory contains `edge-agent`, `edge-agentctl`, the default
 configuration, a systemd unit, and `install.sh`.
+
+Docker is not required to build the agent. With Go 1.22 or newer installed on
+Linux, you can compile both binaries natively. From another operating system,
+cross-compile with <code>GOOS=linux</code> and assemble the same installer
+bundle. See
+[Build the agent without Docker](./agent/README.md#option-1-build-directly-with-go)
+for the exact commands.
 
 ### 3. Install and enroll on the device
 

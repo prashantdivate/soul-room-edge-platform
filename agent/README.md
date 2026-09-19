@@ -19,8 +19,8 @@ You need:
 - outbound device access to the Soul Room gateway, normally TCP port 8443
 - root access for the packaged installer
 
-Docker is needed only on the build computer. It is not required on the device
-to run the agent.
+Choose either Go 1.22 or Docker on the build computer. Neither tool is required
+on a device that receives a prebuilt bundle.
 
 ## Build The Agent
 
@@ -32,8 +32,45 @@ Run <code>uname -m</code> on the target device:
 | <code>aarch64</code> or <code>arm64</code> | <code>embedded-linux-arm64</code> | 64-bit Raspberry Pi, i.MX8MP |
 | <code>armv7l</code> or <code>armv7</code> | <code>embedded-linux-armv7</code> | 32-bit ARMv7 boards |
 
-From the <code>agent</code> directory, first run the tests and then export the
-bundle you need:
+### Option 1: Build directly with Go
+
+This is the shortest path when Go 1.22 or newer is installed on the Linux
+device, or on a Linux build computer with the same CPU architecture:
+
+~~~bash
+cd agent
+go test ./...
+mkdir -p dist/native
+CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+  -o dist/native/edge-agent ./cmd/edge-agent
+CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
+  -o dist/native/edge-agentctl ./cmd/edge-agentctl
+
+cp configs/embedded-linux.yaml dist/native/config.yaml
+cp packaging/systemd/edge-agent.service dist/native/
+cp packaging/install.sh dist/native/
+chmod +x dist/native/install.sh
+~~~
+
+The resulting <code>dist/native</code> directory is the same kind of
+installation bundle used below. When building on a different CPU, cross-compile
+both Go commands with these environment values:
+
+| Target device | Go environment |
+| --- | --- |
+| x86-64 | <code>GOOS=linux GOARCH=amd64 CGO_ENABLED=0</code> |
+| 64-bit ARM | <code>GOOS=linux GOARCH=arm64 CGO_ENABLED=0</code> |
+| 32-bit ARMv7 | <code>GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0</code> |
+
+For example, prefix each Go build command with
+<code>GOOS=linux GOARCH=arm64 CGO_ENABLED=0</code> for an ARM64 target.
+Environment-variable syntax differs in PowerShell, which is why Docker is the
+simpler reproducible cross-build path on Windows.
+
+### Option 2: Build reproducible bundles with Docker
+
+From the <code>agent</code> directory, run the tests and export the bundle you
+need:
 
 ~~~bash
 docker build --target test .

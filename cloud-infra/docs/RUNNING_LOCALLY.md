@@ -7,7 +7,16 @@ requires Docker Desktop, or Docker Engine with Docker Compose v2.
 
 Run all commands in this section from the repository root.
 
-Create the local environment file:
+The environment file is optional for a localhost-only evaluation. If owner
+values are omitted, a clean installation uses:
+
+| Field | Local fallback |
+| --- | --- |
+| Email | <code>admin@soulroom.local</code> |
+| Password | <code>change-me-local</code> |
+
+Do not expose that fallback password to a LAN or the internet. For normal use,
+create the local environment file:
 
 ~~~bash
 # Linux, macOS, or WSL
@@ -16,9 +25,11 @@ cp cloud-infra/.env.example cloud-infra/.env
 
 ~~~powershell
 # Windows PowerShell
-Copy-Item cloud-infra\.env.example cloud-infra\.env
+Copy-Item -Path .\cloud-infra\.env.example -Destination .\cloud-infra\.env
 ~~~
 
+Here, <code>Copy-Item</code> copies the supplied template from
+<code>-Path</code> to the private file named by <code>-Destination</code>.
 Edit <code>cloud-infra/.env</code> before starting. At minimum, choose the
 company identity and first organization owner:
 
@@ -29,10 +40,9 @@ SOULROOM_ADMIN_EMAIL=owner@your-company.com
 SOULROOM_ADMIN_PASSWORD=choose-a-unique-password-with-12-or-more-characters
 ~~~
 
-The values above are examples. Soul Room does not publish a shared default
-login. On a clean data volume, it creates the owner from the exact values in
-your <code>.env</code>. On an existing volume, the original account remains in
-effect and bootstrap values are not reapplied.
+The values above are examples. On a clean data volume, Soul Room creates the
+owner from the exact values in your <code>.env</code>. On an existing volume,
+the original account remains in effect and bootstrap values are not reapplied.
 
 Build and start the complete stack:
 

@@ -8,18 +8,6 @@ a React operations console. It is intended for Ubuntu and Debian systems,
 Yocto-based products, industrial gateways, single-board computers, and other
 embedded Linux devices.
 
-> [!NOTE]
-> **Soul Room is currently released as an open-source public beta.** The core
-> fleet-management workflows are implemented and suitable for evaluation,
-> development labs, and controlled pilot deployments. Before using Soul Room
-> for production or safety-critical fleets, independently validate your
-> security configuration, tenant isolation, update compatibility, rollback
-> strategy, backups, and recovery procedures. Review the current
-> [implementation status](./cloud-infra/docs/IMPLEMENTATION_STATUS.md), and
-> report reproducible problems through GitHub Issues. Feedback and
-> contributions from embedded Linux, Yocto, IoT, security, and platform
-> engineering teams are welcome.
-
 ## Console Preview
 
 Login page

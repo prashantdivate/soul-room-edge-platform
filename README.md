@@ -22,12 +22,19 @@ embedded Linux devices.
 
 ## Console Preview
 
+Login page
 <p align="center">
   <img src="./docs/assets/soul-room-login.png" alt="Soul Room login screen" width="100%">
 </p>
 
+Device health view
 <p align="center">
   <img src="./docs/assets/device-health.png" alt="Soul Room device health tab" width="100%">
+</p>
+
+Setup OTA campaign
+<p align="center">
+  <img src="./docs/assets/update-campeign.png" alt="Soul Room OTA campeign" width="100%">
 </p>
 
 ## Quick Start
@@ -172,7 +179,7 @@ docker build --target embedded-linux-armv7 --output type=local,dest=agent/dist/e
 Each output directory contains `edge-agent`, `edge-agentctl`, the default
 configuration, a systemd unit, and `install.sh`.
 
-Docker is not required to build the agent. With Go 1.22 or newer installed on
+Docker is not required to build the agent. With Go 1.27.1 or newer installed on
 Linux, you can compile both binaries natively. From another operating system,
 cross-compile with <code>GOOS=linux</code> and assemble the same installer
 bundle. See
@@ -318,10 +325,9 @@ The React production build runs as part of the web image build.
 ## Automated Builds And Security
 
 Repository-level GitHub Actions run Go and React tests, formatting checks,
-cross-compilation, Compose validation, CodeQL analysis, dependency review,
-`govulncheck`, npm audit, and Trivy repository, secret, configuration, and
-container-image scans. Dependabot checks Go, npm, Docker, and GitHub Actions
-dependencies each week.
+cross-compilation, Compose validation, CodeQL analysis, `govulncheck`, npm
+audit, and Trivy dependency, secret, configuration, and container-image scans.
+Dependabot checks Go, npm, Docker, and GitHub Actions dependencies each week.
 
 Successful changes on `master` publish `linux/amd64` and `linux/arm64` images
 with SBOM and provenance attestations to:

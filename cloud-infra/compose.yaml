@@ -54,12 +54,12 @@ services:
       context: .
       dockerfile: deploy/compose/web.Dockerfile
     ports:
-      - "3080:80"
+      - "3080:8080"
     depends_on:
       platform:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
       interval: 5s
       timeout: 3s
       retries: 12

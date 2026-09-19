@@ -20,8 +20,8 @@ GitHub Issues.
 
 ## Automated Checks
 
-GitHub Actions runs CodeQL, dependency review, `govulncheck`, npm audit, and
-Trivy scans for dependencies, secrets, configuration, and final container
-images. High or critical findings block image publication. These checks reduce
+GitHub Actions runs CodeQL, `govulncheck`, npm audit, and Trivy scans for
+dependencies, secrets, configuration, and final container images. High or
+critical findings block image publication. These checks reduce
 risk but do not replace deployment-specific threat modeling, penetration
 testing, key management, TLS configuration, or OTA hardware qualification.

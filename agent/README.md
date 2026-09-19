@@ -19,7 +19,7 @@ You need:
 - outbound device access to the Soul Room gateway, normally TCP port 8443
 - root access for the packaged installer
 
-Choose either Go 1.22 or Docker on the build computer. Neither tool is required
+Choose either Go 1.27.1 or Docker on the build computer. Neither tool is required
 on a device that receives a prebuilt bundle.
 
 ## Build The Agent
@@ -48,7 +48,7 @@ with either option below when testing local changes.
 
 ### Option 1: Build directly with Go
 
-This is the shortest path when Go 1.22 or newer is installed on the Linux
+This is the shortest path when Go 1.27.1 or newer is installed on the Linux
 device, or on a Linux build computer with the same CPU architecture:
 
 ~~~bash

@@ -6,17 +6,17 @@ import (
 )
 
 type DownstreamDevice struct {
-	ID              string            `json:"id"`
-	ParentGatewayID string            `json:"parent_gateway_id"`
-	ConnectorType   string            `json:"connector_type"`
-	ProtocolAddress string            `json:"protocol_address"`
-	Model           string            `json:"model"`
-	FirmwareVersion string            `json:"firmware_version"`
-	LastSeen        time.Time         `json:"last_seen"`
-	Health          string            `json:"health"`
-	Capabilities    []string          `json:"capabilities"`
+	ID               string            `json:"id"`
+	ParentGatewayID  string            `json:"parent_gateway_id"`
+	ConnectorType    string            `json:"connector_type"`
+	ProtocolAddress  string            `json:"protocol_address"`
+	Model            string            `json:"model"`
+	FirmwareVersion  string            `json:"firmware_version"`
+	LastSeen         time.Time         `json:"last_seen"`
+	Health           string            `json:"health"`
+	Capabilities     []string          `json:"capabilities"`
 	CommandAllowlist []string          `json:"command_allowlist"`
-	Metadata        map[string]string `json:"metadata,omitempty"`
+	Metadata         map[string]string `json:"metadata,omitempty"`
 }
 
 type Metric struct {

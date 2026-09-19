@@ -20,7 +20,7 @@ jobs:
       run:
         working-directory: agent
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version: "1.27.1"
@@ -45,7 +45,7 @@ jobs:
       run:
         working-directory: cloud-infra
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version: "1.27.1"
@@ -66,7 +66,7 @@ jobs:
       run:
         working-directory: cloud-infra/web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
@@ -82,7 +82,7 @@ jobs:
     name: Compose configuration
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Validate deployment configuration
         working-directory: cloud-infra
         run: docker compose config --quiet

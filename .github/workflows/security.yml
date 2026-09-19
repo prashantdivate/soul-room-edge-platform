@@ -30,7 +30,7 @@ jobs:
           - language: javascript-typescript
             build-mode: none
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         if: matrix.language == 'go'
         with:
@@ -54,7 +54,7 @@ jobs:
     name: Dependency vulnerabilities
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version: "1.27.1"
@@ -82,7 +82,7 @@ jobs:
     name: Repository vulnerabilities and secrets
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Scan dependencies, configuration, and committed secrets
@@ -110,7 +110,7 @@ jobs:
           - name: shellhub-keygen
             dockerfile: cloud-infra/deploy/compose/shellhub-keygen.Dockerfile
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Build image
         run: docker build --file "${{ matrix.dockerfile }}" --tag "soul-room/${{ matrix.name }}:scan" cloud-infra
       - name: Scan final image

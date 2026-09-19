@@ -1,0 +1,137 @@
+name: Security
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v5
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - uses: actions/setup-go@v6
+        if: matrix.language == 'go'
+        with:
+          go-version: "1.22.x"
+          cache: false
+      - name: Build Go modules
+        if: matrix.language == 'go'
+        run: |
+          (cd agent && go build ./...)
+          (cd cloud-infra && go build ./...)
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  dependencies:
+    name: Dependency vulnerabilities
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.22.x"
+          cache: false
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+      - name: Scan agent Go calls
+        working-directory: agent
+        run: govulncheck ./...
+      - name: Scan control-plane Go calls
+        working-directory: cloud-infra
+        run: govulncheck ./...
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cloud-infra/web/package-lock.json
+      - name: Audit web dependencies
+        working-directory: cloud-infra/web
+        run: |
+          npm ci
+          npm audit --audit-level=high
+
+  repository-scan:
+    name: Repository vulnerabilities and secrets
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Scan dependencies, configuration, and committed secrets
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+  container-images:
+    name: Container scan (${{ matrix.name }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: platform
+            dockerfile: cloud-infra/deploy/compose/service.Dockerfile
+          - name: web-ui
+            dockerfile: cloud-infra/deploy/compose/web.Dockerfile
+          - name: shellhub-keygen
+            dockerfile: cloud-infra/deploy/compose/shellhub-keygen.Dockerfile
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build image
+        run: docker build --file "${{ matrix.dockerfile }}" --tag "soul-room/${{ matrix.name }}:scan" cloud-infra
+      - name: Scan final image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: soul-room/${{ matrix.name }}:scan
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table

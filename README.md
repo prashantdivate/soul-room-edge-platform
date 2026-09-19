@@ -8,10 +8,17 @@ a React operations console. It is intended for Ubuntu and Debian systems,
 Yocto-based products, industrial gateways, single-board computers, and other
 embedded Linux devices.
 
-> **Project status:** Soul Room is an implemented MVP for evaluation and
-> continued product development. It is not yet an audited or certified
-> production fleet service. Review the [implementation status](./cloud-infra/docs/IMPLEMENTATION_STATUS.md)
-> before using it for a customer deployment.
+> [!NOTE]
+> **Soul Room is currently released as an open-source public beta.** The core
+> fleet-management workflows are implemented and suitable for evaluation,
+> development labs, and controlled pilot deployments. Before using Soul Room
+> for production or safety-critical fleets, independently validate your
+> security configuration, tenant isolation, update compatibility, rollback
+> strategy, backups, and recovery procedures. Review the current
+> [implementation status](./cloud-infra/docs/IMPLEMENTATION_STATUS.md), and
+> report reproducible problems through GitHub Issues. Feedback and
+> contributions from embedded Linux, Yocto, IoT, security, and platform
+> engineering teams are welcome.
 
 ## Console Preview
 
@@ -69,19 +76,23 @@ For a physical device, also set `SOULROOM_DEVICE_PUBLIC_HOST` to the DNS name
 or LAN address that the device can reach. See
 [physical-device networking](./cloud-infra/docs/RUNNING_LOCALLY.md#connect-a-physical-device).
 
-### 2. Build and start Soul Room
+### 2. Install and start Soul Room
 
-Run one command from the repository root:
+Pull the published multi-architecture images and start the platform with one
+command from the repository root:
 
 ```bash
 # Linux, macOS, or WSL
-./platform.sh build
+./platform.sh install
 ```
 
 ```bat
 :: Windows Command Prompt or PowerShell
-platform.cmd build
+platform.cmd install
 ```
+
+Use `./platform.sh build` or `platform.cmd build` instead when you want to
+compile the images from the checked-out source.
 
 Open [http://localhost:3080](http://localhost:3080). When another computer is
 hosting the stack, replace `localhost` with that computer's DNS name or IP
@@ -105,6 +116,7 @@ creates a new installation from the current `.env` values.
 
 | Command | Purpose |
 | --- | --- |
+| `./platform.sh install` / `platform.cmd install` | Pull published GHCR images and start the platform |
 | `./platform.sh up` / `platform.cmd up` | Start existing images |
 | `./platform.sh build` / `platform.cmd build` | Build images and start the platform |
 | `./platform.sh refresh` / `platform.cmd refresh` | Rebuild and recreate containers after source changes |
@@ -141,6 +153,10 @@ root:
 | `x86_64` | `embedded-linux-amd64` |
 | `aarch64` or `arm64` | `embedded-linux-arm64` |
 | `armv7l` or `armv7` | `embedded-linux-armv7` |
+
+Tagged GitHub releases include ready-to-install archives for all three targets
+and a `SHA256SUMS` file. Download the matching archive from **Releases** when
+you do not need to compile the agent yourself.
 
 ```bash
 # x86-64
@@ -298,6 +314,25 @@ docker compose -f cloud-infra/compose.yaml config
 ```
 
 The React production build runs as part of the web image build.
+
+## Automated Builds And Security
+
+Repository-level GitHub Actions run Go and React tests, formatting checks,
+cross-compilation, Compose validation, CodeQL analysis, dependency review,
+`govulncheck`, npm audit, and Trivy repository, secret, configuration, and
+container-image scans. Dependabot checks Go, npm, Docker, and GitHub Actions
+dependencies each week.
+
+Successful changes on `master` publish `linux/amd64` and `linux/arm64` images
+with SBOM and provenance attestations to:
+
+- `ghcr.io/prashantdivate/soul-room-platform`
+- `ghcr.io/prashantdivate/soul-room-web-ui`
+- `ghcr.io/prashantdivate/soul-room-shellhub-keygen`
+
+Tags matching `v*` also create a GitHub Release containing amd64, arm64, and
+ARMv7 agent installation bundles with SHA-256 checksums. Release publishing is
+blocked when tests or high/critical vulnerability checks fail.
 
 ## License
 

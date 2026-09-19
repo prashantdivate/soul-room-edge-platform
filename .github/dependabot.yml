@@ -1,0 +1,40 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - security
+
+  - package-ecosystem: gomod
+    directory: /agent
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+
+  - package-ecosystem: gomod
+    directory: /cloud-infra
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+
+  - package-ecosystem: npm
+    directory: /cloud-infra/web
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - frontend
+
+  - package-ecosystem: docker
+    directory: /cloud-infra/deploy/compose
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - containers

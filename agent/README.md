@@ -32,6 +32,20 @@ Run <code>uname -m</code> on the target device:
 | <code>aarch64</code> or <code>arm64</code> | <code>embedded-linux-arm64</code> | 64-bit Raspberry Pi, i.MX8MP |
 | <code>armv7l</code> or <code>armv7</code> | <code>embedded-linux-armv7</code> | 32-bit ARMv7 boards |
 
+### Option 0: Download a published bundle
+
+Tagged releases provide ready-to-install archives for every architecture at
+[GitHub Releases](https://github.com/prashantdivate/soul-room-edge-platform/releases).
+Download the matching archive and `SHA256SUMS`, verify it, then extract it:
+
+~~~bash
+sha256sum -c SHA256SUMS --ignore-missing
+tar -xzf soul-room-agent-VERSION-linux-ARCH.tar.gz
+~~~
+
+Continue with [Install On The Device](#install-on-the-device). Build from source
+with either option below when testing local changes.
+
 ### Option 1: Build directly with Go
 
 This is the shortest path when Go 1.22 or newer is installed on the Linux

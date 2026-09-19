@@ -41,6 +41,9 @@
   UI overrides, deployment-default reset, audit events, and safe read-only
   infrastructure visibility. Settings drive presence, telemetry, OTA,
   enrollment, and job behavior rather than acting as UI-only preferences.
+* Repository-level CI, CodeQL, dependency and container vulnerability gates,
+  weekly dependency updates, and multi-architecture GHCR image publication
+  with SBOM and provenance metadata.
 
 ## Simulated or Interface-Only
 

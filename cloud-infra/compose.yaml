@@ -2,7 +2,7 @@ name: soul-room
 
 services:
   seed:
-    image: soul-room-platform:local
+    image: ${SOULROOM_PLATFORM_IMAGE:-ghcr.io/prashantdivate/soul-room-platform:latest}
     command: /dev-seed
     user: "0:0"
     environment:
@@ -16,7 +16,7 @@ services:
     restart: "no"
 
   platform:
-    image: soul-room-platform:local
+    image: ${SOULROOM_PLATFORM_IMAGE:-ghcr.io/prashantdivate/soul-room-platform:latest}
     build:
       context: .
       dockerfile: deploy/compose/service.Dockerfile
@@ -49,6 +49,7 @@ services:
         condition: service_healthy
 
   web-ui:
+    image: ${SOULROOM_WEB_IMAGE:-ghcr.io/prashantdivate/soul-room-web-ui:latest}
     build:
       context: .
       dockerfile: deploy/compose/web.Dockerfile
@@ -64,6 +65,7 @@ services:
       retries: 12
 
   shellhub-keygen:
+    image: ${SOULROOM_SHELLHUB_KEYGEN_IMAGE:-ghcr.io/prashantdivate/soul-room-shellhub-keygen:latest}
     build:
       context: .
       dockerfile: deploy/compose/shellhub-keygen.Dockerfile

@@ -16,6 +16,7 @@ if errorlevel 1 exit /b %errorlevel%
 
 pushd "%PLATFORM_DIR%" || exit /b 1
 
+if /I "%COMMAND%"=="install" goto :install
 if /I "%COMMAND%"=="up" goto :up
 if /I "%COMMAND%"=="build" goto :build
 if /I "%COMMAND%"=="down" goto :down
@@ -29,6 +30,13 @@ echo Unknown command: %COMMAND% 1>&2
 popd
 call :help
 exit /b 2
+
+:install
+docker compose pull || goto :failed
+docker compose up --no-build --remove-orphans -d || goto :failed
+docker compose ps || goto :failed
+echo Soul Room images were pulled and the platform is available at http://localhost:3080
+goto :success
 
 :up
 docker compose up --remove-orphans -d || goto :failed
@@ -118,7 +126,8 @@ echo Usage:
 echo   platform.cmd ^<command^> [service]
 echo.
 echo Commands:
-echo   up                 Start the complete platform using local images
+echo   install            Pull published images, then start the platform
+echo   up                 Start the platform using images already on this host
 echo   build              Build local images, then start the platform
 echo   down               Stop the platform and preserve persistent data
 echo   refresh            Rebuild and recreate from the current source
@@ -129,6 +138,7 @@ echo   doctor             Check Docker and validate the Compose configuration
 echo   help               Show this help
 echo.
 echo Examples:
+echo   platform.cmd install
 echo   platform.cmd up
 echo   platform.cmd build
 echo   platform.cmd refresh

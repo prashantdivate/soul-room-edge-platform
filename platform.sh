@@ -13,7 +13,8 @@ Usage:
   ./platform.sh <command> [service]
 
 Commands:
-  up                 Start the complete platform using local images
+  install            Pull published images, then start the platform
+  up                 Start the platform using images already on this host
   build              Build local images, then start the platform
   down               Stop the platform and preserve persistent data
   refresh            Rebuild and recreate from the current source
@@ -24,6 +25,7 @@ Commands:
   help               Show this help
 
 Examples:
+  ./platform.sh install
   ./platform.sh up
   ./platform.sh build
   ./platform.sh refresh
@@ -56,6 +58,13 @@ if [ "$#" -gt 0 ]; then
 fi
 
 case "$command" in
+  install)
+    require_docker
+    compose pull
+    compose up --no-build --remove-orphans -d
+    compose ps
+    echo "Soul Room images were pulled and the platform is available at http://localhost:3080"
+    ;;
   up)
     require_docker
     compose up --remove-orphans -d

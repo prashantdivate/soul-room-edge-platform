@@ -1,0 +1,201 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  quality:
+    name: Release quality gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.22.x"
+          cache: false
+      - name: Test Go modules
+        run: |
+          (cd agent && go test ./... && go vet ./...)
+          (cd cloud-infra && go test ./... && go vet ./...)
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cloud-infra/web/package-lock.json
+      - name: Test and build web console
+        working-directory: cloud-infra/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+          npm audit --audit-level=high
+      - name: Validate Compose
+        working-directory: cloud-infra
+        run: docker compose config --quiet
+
+  scan-images:
+    name: Release image scan (${{ matrix.name }})
+    needs: quality
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: platform
+            dockerfile: cloud-infra/deploy/compose/service.Dockerfile
+          - name: web-ui
+            dockerfile: cloud-infra/deploy/compose/web.Dockerfile
+          - name: shellhub-keygen
+            dockerfile: cloud-infra/deploy/compose/shellhub-keygen.Dockerfile
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build release candidate
+        run: docker build --file "${{ matrix.dockerfile }}" --tag "soul-room/${{ matrix.name }}:candidate" cloud-infra
+      - name: Block vulnerable release images
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: soul-room/${{ matrix.name }}:candidate
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+  publish-images:
+    name: Publish ${{ matrix.name }}
+    needs:
+      - quality
+      - scan-images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: soul-room-platform
+            dockerfile: cloud-infra/deploy/compose/service.Dockerfile
+          - name: soul-room-web-ui
+            dockerfile: cloud-infra/deploy/compose/web.Dockerfile
+          - name: soul-room-shellhub-keygen
+            dockerfile: cloud-infra/deploy/compose/shellhub-keygen.Dockerfile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Sign in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+      - name: Build and publish multi-architecture image
+        uses: docker/build-push-action@v7
+        with:
+          context: cloud-infra
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          provenance: mode=max
+          sbom: true
+
+  agent-bundles:
+    name: Agent bundle (${{ matrix.target }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: quality
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - target: linux-amd64
+            goarch: amd64
+            goarm: ""
+          - target: linux-arm64
+            goarch: arm64
+            goarm: ""
+          - target: linux-armv7
+            goarch: arm
+            goarm: "7"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: agent/go.mod
+          cache: false
+      - name: Build installation bundle
+        working-directory: agent
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          set -eu
+          destination="dist/${{ matrix.target }}"
+          mkdir -p "$destination"
+          CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o "$destination/edge-agent" ./cmd/edge-agent
+          CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o "$destination/edge-agentctl" ./cmd/edge-agentctl
+          cp configs/embedded-linux.yaml "$destination/config.yaml"
+          cp packaging/systemd/edge-agent.service "$destination/edge-agent.service"
+          cp packaging/install.sh "$destination/install.sh"
+          chmod +x "$destination/edge-agent" "$destination/edge-agentctl" "$destination/install.sh"
+          tar -C "$destination" -czf "dist/soul-room-agent-${GITHUB_REF_NAME}-${{ matrix.target }}.tar.gz" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-${{ matrix.target }}
+          path: agent/dist/*.tar.gz
+          if-no-files-found: error
+
+  github-release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - publish-images
+      - agent-bundles
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-*
+          path: dist
+          merge-multiple: true
+      - name: Create checksums
+        run: sha256sum dist/*.tar.gz > dist/SHA256SUMS
+      - name: Create release and upload agent bundles
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "Soul Room $GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber

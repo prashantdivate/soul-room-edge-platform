@@ -22,13 +22,13 @@ owner email, and owner password before the first start.
 ~~~bash
 # Linux, macOS, or WSL
 cp cloud-infra/.env.example cloud-infra/.env
-./platform.sh build
+./platform.sh install
 ~~~
 
 ~~~powershell
 # Windows PowerShell
 Copy-Item -Path .\cloud-infra\.env.example -Destination .\cloud-infra\.env
-platform.cmd build
+platform.cmd install
 ~~~
 
 Open [http://localhost:3080](http://localhost:3080).
@@ -39,7 +39,9 @@ When configured, a new installation creates its first owner from
 volume keeps the account created during its first initialization; changing
 <code>.env</code> does not overwrite that account.
 
-The local launcher also supports <code>up</code>, <code>down</code>,
+The <code>install</code> command pulls the published GHCR images. Use
+<code>build</code> when developing from the checked-out source. The local
+launcher also supports <code>up</code>, <code>down</code>,
 <code>refresh</code>, <code>restart</code>, <code>status</code>,
 <code>logs</code>, and <code>doctor</code>. See
 [Run the platform locally](docs/RUNNING_LOCALLY.md) for networking, service

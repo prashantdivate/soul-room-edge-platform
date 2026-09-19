@@ -31,6 +31,8 @@
   diagnostics, and version.
 * Docker-built amd64, arm64, and ARMv7 installation bundles with a single
   systemd-aware installer that runs under the device's existing system context.
+* GitHub release automation for amd64, arm64, and ARMv7 installation archives
+  with SHA-256 checksums after tests and security gates pass.
 
 ## Deferred
 

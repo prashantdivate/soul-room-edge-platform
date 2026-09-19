@@ -1,10 +1,18 @@
 version: 2
 
+# Keep routine upgrades within the current major version. Dependabot still
+# raises security updates even when they require a major-version change.
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
     labels:
       - dependencies
       - security
@@ -13,6 +21,12 @@ updates:
     directory: /agent
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
     labels:
       - dependencies
 
@@ -20,6 +34,12 @@ updates:
     directory: /cloud-infra
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
     labels:
       - dependencies
 
@@ -27,6 +47,12 @@ updates:
     directory: /cloud-infra/web
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
     labels:
       - dependencies
       - frontend
@@ -35,6 +61,12 @@ updates:
     directory: /cloud-infra/deploy/compose
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
     labels:
       - dependencies
       - containers

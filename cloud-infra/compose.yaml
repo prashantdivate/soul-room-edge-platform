@@ -37,11 +37,16 @@ services:
       SOULROOM_DEFAULT_OTA_PILOT_PERCENT: ${SOULROOM_DEFAULT_OTA_PILOT_PERCENT:-10}
       SOULROOM_DEFAULT_ENROLLMENT_TTL_HOURS: ${SOULROOM_DEFAULT_ENROLLMENT_TTL_HOURS:-24}
       SOULROOM_DEFAULT_JOB_TTL_MINUTES: ${SOULROOM_DEFAULT_JOB_TTL_MINUTES:-60}
+      SOULROOM_AI_SECRET_KEY_PATH: /data/ai-secrets.key
+      SOULROOM_AI_REQUEST_TIMEOUT: ${SOULROOM_AI_REQUEST_TIMEOUT:-45s}
+      SOULROOM_AI_REQUESTS_PER_MINUTE: ${SOULROOM_AI_REQUESTS_PER_MINUTE:-30}
     ports:
       - "8080:8080"
       - "8443:8443"
     volumes:
       - app-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -69,6 +74,10 @@ services:
     build:
       context: .
       dockerfile: deploy/compose/shellhub-keygen.Dockerfile
+    # Existing installations may have root-owned 0600 keys from earlier
+    # releases. This one-shot container needs to normalize those modes without
+    # replacing the persistent key material.
+    user: "0:0"
     volumes:
       - shellhub-keys:/keys
     restart: "no"

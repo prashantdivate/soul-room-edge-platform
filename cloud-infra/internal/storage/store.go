@@ -44,6 +44,7 @@ type data struct {
 	Artifacts        map[string]model.Artifact         `json:"artifacts"`
 	OTACampaigns     map[string]ota.Campaign           `json:"ota_campaigns"`
 	PlatformSettings map[string]model.PlatformSettings `json:"platform_settings"`
+	AIConfigurations map[string]model.AIConfiguration  `json:"ai_configurations"`
 	Audit            []model.AuditEvent                `json:"audit"`
 }
 
@@ -97,6 +98,9 @@ func (d *data) init() {
 	}
 	if d.PlatformSettings == nil {
 		d.PlatformSettings = map[string]model.PlatformSettings{}
+	}
+	if d.AIConfigurations == nil {
+		d.AIConfigurations = map[string]model.AIConfiguration{}
 	}
 }
 
@@ -208,6 +212,35 @@ func (s *Store) ResetPlatformSettings(tc tenancy.Context) error {
 		return ErrNotFound
 	}
 	delete(s.data.PlatformSettings, tc.TenantID)
+	return s.saveLocked()
+}
+
+func (s *Store) AIConfiguration(tc tenancy.Context) (model.AIConfiguration, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	value, ok := s.data.AIConfigurations[tc.TenantID]
+	return value, ok
+}
+
+func (s *Store) SaveAIConfiguration(tc tenancy.Context, value model.AIConfiguration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data.Organizations[tc.TenantID]; !ok {
+		return ErrNotFound
+	}
+	value.UpdatedBy = tc.ActorID
+	value.UpdatedAt = time.Now()
+	s.data.AIConfigurations[tc.TenantID] = value
+	return s.saveLocked()
+}
+
+func (s *Store) DeleteAIConfiguration(tc tenancy.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data.Organizations[tc.TenantID]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data.AIConfigurations, tc.TenantID)
 	return s.saveLocked()
 }
 

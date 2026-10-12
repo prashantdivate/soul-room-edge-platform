@@ -26,6 +26,19 @@ type PlatformSettings struct {
 	UpdatedAt                 time.Time `json:"updated_at,omitempty"`
 }
 
+// AIConfiguration contains only encrypted provider credentials. API responses
+// expose a separate redacted view so ciphertext never leaves the control plane.
+type AIConfiguration struct {
+	Provider         string    `json:"provider"`
+	BaseURL          string    `json:"base_url"`
+	Model            string    `json:"model"`
+	APIKeyCiphertext string    `json:"api_key_ciphertext,omitempty"`
+	KeyHint          string    `json:"key_hint,omitempty"`
+	Enabled          bool      `json:"enabled"`
+	UpdatedBy        string    `json:"updated_by,omitempty"`
+	UpdatedAt        time.Time `json:"updated_at,omitempty"`
+}
+
 type User struct {
 	ID               string    `json:"id"`
 	Email            string    `json:"email"`

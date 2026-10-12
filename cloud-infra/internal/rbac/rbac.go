@@ -27,17 +27,18 @@ const (
 	AuditRead         Permission = "audit.read"
 	RemoteCreate      Permission = "remote_access.create"
 	TenantSettings    Permission = "tenant.settings.manage"
+	AIUse             Permission = "ai.use"
 )
 
 var RolePermissions = map[string][]Permission{
-	"platform_administrator":     {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceDelete, DeviceCommand, JobDelete, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate, TenantSettings},
-	"organization_owner":         {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceDelete, DeviceCommand, JobDelete, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate, TenantSettings},
-	"organization_administrator": {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceDelete, DeviceCommand, JobDelete, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate},
-	"fleet_operator":             {DeviceRead, DeviceCommand, TelemetryRead},
-	"deployment_manager":         {DeviceRead, TelemetryRead, DeploymentCreate, DeploymentCancel, ArtifactUpload},
-	"support_engineer":           {DeviceRead, TelemetryRead, DeviceCommand, RemoteCreate},
-	"security_auditor":           {DeviceRead, TelemetryRead, AuditRead},
-	"read_only_viewer":           {DeviceRead, TelemetryRead},
+	"platform_administrator":     {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceDelete, DeviceCommand, JobDelete, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate, TenantSettings, AIUse},
+	"organization_owner":         {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceDelete, DeviceCommand, JobDelete, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate, TenantSettings, AIUse},
+	"organization_administrator": {DeviceRead, DeviceEnroll, DeviceUpdate, DeviceDelete, DeviceCommand, JobDelete, DeviceReboot, TelemetryRead, DeploymentCreate, DeploymentApprove, DeploymentCancel, ArtifactUpload, ProfileManage, UserManage, AuditRead, RemoteCreate, AIUse},
+	"fleet_operator":             {DeviceRead, DeviceCommand, TelemetryRead, AIUse},
+	"deployment_manager":         {DeviceRead, TelemetryRead, DeploymentCreate, DeploymentCancel, ArtifactUpload, AIUse},
+	"support_engineer":           {DeviceRead, TelemetryRead, DeviceCommand, RemoteCreate, AIUse},
+	"security_auditor":           {DeviceRead, TelemetryRead, AuditRead, AIUse},
+	"read_only_viewer":           {DeviceRead, TelemetryRead, AIUse},
 }
 
 func Authorize(ctx context.Context, permission Permission) error {

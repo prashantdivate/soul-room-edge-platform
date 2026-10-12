@@ -243,6 +243,14 @@ Installed Debian and RPM packages are reported as inventory. Installing Trivy
 adds the <code>security:trivy</code> capability and allows an operator to
 request an on-demand OS-package advisory scan.
 
+The agent also reports the exact typed jobs it can execute. Soul Room uses
+these capabilities to keep unsupported AI-assistant actions out of the review
+queue. Collection jobs are handled locally. An approved reboot is scheduled
+through <code>systemd-run</code> with a short delay, or through
+<code>shutdown -r +1</code> on a non-systemd Linux image, so the result can be
+reported before the device restarts. The service context must be allowed to
+schedule a reboot.
+
 Remote SSH is intentionally separate. The agent never accepts arbitrary shell
 commands; install the ShellHub agent only on devices where audited interactive
 maintenance is allowed.

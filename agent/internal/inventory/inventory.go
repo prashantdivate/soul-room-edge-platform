@@ -73,10 +73,18 @@ func CollectWithPluginDir(id identity.Identity, version, pluginDir string) Inven
 }
 
 func capabilities(pluginDir string) []string {
-	values := []string{"telemetry", "inventory", "jobs"}
+	values := []string{
+		"telemetry",
+		"inventory",
+		"jobs",
+		"job:collect_diagnostics",
+		"job:collect_inventory",
+		"job:collect_logs",
+		"job:reboot",
+	}
 	values = append(values, ota.DiscoverCapabilities(pluginDir, ota.OSRunner{})...)
 	if _, err := exec.LookPath("trivy"); err == nil {
-		values = append(values, "security:trivy")
+		values = append(values, "security:trivy", "job:scan_vulnerabilities")
 	}
 	return values
 }

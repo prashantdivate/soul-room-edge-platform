@@ -23,5 +23,10 @@
 | Reconnect storm | Jitter guidance, rate limits, stateless gateway, durable DB state | Cloud load balancer capacity may be exhausted |
 | Gateway impersonation | mTLS, parent-child authorization, enrollment policy | Stolen gateway cert can spoof children until revoked |
 | Downstream command abuse | Connector command allowlists, audit, approval hooks | Safe command definitions are connector-specific |
+| Prompt injection through fleet data | Fleet values are marked untrusted, compact context excludes raw logs, server validates every proposed action | A model can still produce misleading analysis that an operator must review |
+| AI action overreach | No tool loop, narrow typed-job allowlist, current RBAC recheck, ten-minute actor/tenant-bound approval, idempotency, audit | An authorized operator can approve a harmful reboot or collection at the wrong time |
+| AI provider credential theft | AES-256-GCM at rest, tenant-bound authenticated data, redacted API responses, restrictive key-file permissions | Host or volume compromise can expose both ciphertext and its encryption key |
+| AI provider data retention | Minimized tenant snapshot and explicit exclusions | The external provider controls retention and jurisdiction under its own terms |
+| Custom model endpoint abuse | Owner-only configuration, URL validation, metadata/link-local rejection, bounded response and timeout | A trusted tenant owner can still target reachable private services; production deployments should enforce egress policy |
 | Update rollback failure | OTA state machine, explicit rollback state, health confirmation | Adapter bugs can leave device needing manual recovery |
 | Supply-chain compromise | Dependency scanning, image scanning, signed artifacts, SBOM guidance | Build system compromise remains severe |

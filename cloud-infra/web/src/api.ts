@@ -119,6 +119,39 @@ export type PlatformSettings = {
 export type InfrastructureSetting = { key: string; label: string; value: string; restart_required: boolean };
 export type PlatformSettingsResponse = { settings: PlatformSettings; source: "deployment" | "platform"; can_manage: boolean; infrastructure?: InfrastructureSetting[] };
 
+export type AIProvider = "openai" | "anthropic" | "compatible";
+export type AIConfiguration = {
+  provider?: AIProvider;
+  base_url?: string;
+  model?: string;
+  configured: boolean;
+  enabled: boolean;
+  key_hint?: string;
+  can_manage: boolean;
+  updated_at?: string;
+};
+export type AIChatMessage = { role: "user" | "assistant"; content: string };
+export type AIAction = {
+  id: string;
+  kind: "navigate" | "device_job";
+  title: string;
+  rationale: string;
+  risk: "informational" | "low" | "high";
+  device_id?: string;
+  device_name?: string;
+  job_type?: string;
+  page?: string;
+  approval_token?: string;
+};
+export type AIChatResponse = {
+  answer: string;
+  actions: AIAction[];
+  follow_up_prompts: string[];
+  provider: AIProvider;
+  model: string;
+  usage?: { input_tokens?: number; output_tokens?: number };
+};
+
 export type OTACampaign = {
   id: string;
   name: string;
@@ -340,6 +373,55 @@ export async function resetPlatformSettings(membership: Membership): Promise<Pla
   return request<PlatformSettingsResponse>("/api/v1/platform-settings", {
     method: "DELETE",
     headers: { "X-Tenant-ID": membership.tenant_id },
+  });
+}
+
+export async function getAIConfiguration(membership: Membership): Promise<AIConfiguration> {
+  return request<AIConfiguration>("/api/v1/ai/config", { headers: { "X-Tenant-ID": membership.tenant_id } });
+}
+
+export async function saveAIConfiguration(membership: Membership, configuration: {
+  provider: AIProvider;
+  base_url: string;
+  model: string;
+  api_key?: string;
+  clear_api_key?: boolean;
+  enabled: boolean;
+}): Promise<AIConfiguration> {
+  return request<AIConfiguration>("/api/v1/ai/config", {
+    method: "PUT",
+    headers: { "X-Tenant-ID": membership.tenant_id },
+    body: JSON.stringify(configuration),
+  });
+}
+
+export async function deleteAIConfiguration(membership: Membership): Promise<AIConfiguration> {
+  return request<AIConfiguration>("/api/v1/ai/config", {
+    method: "DELETE",
+    headers: { "X-Tenant-ID": membership.tenant_id },
+  });
+}
+
+export async function testAIConnection(membership: Membership): Promise<{ status: string; provider: string; model: string }> {
+  return request("/api/v1/ai/test", {
+    method: "POST",
+    headers: { "X-Tenant-ID": membership.tenant_id },
+  });
+}
+
+export async function askAssistant(membership: Membership, message: string, history: AIChatMessage[]): Promise<AIChatResponse> {
+  return request<AIChatResponse>("/api/v1/ai/chat", {
+    method: "POST",
+    headers: { "X-Tenant-ID": membership.tenant_id },
+    body: JSON.stringify({ message, history: history.slice(-6) }),
+  });
+}
+
+export async function executeAIAction(membership: Membership, approvalToken: string): Promise<{ status: string; job: Job }> {
+  return request("/api/v1/ai/actions", {
+    method: "POST",
+    headers: { "X-Tenant-ID": membership.tenant_id },
+    body: JSON.stringify({ approval_token: approvalToken }),
   });
 }
 

@@ -9,6 +9,11 @@ The local Compose maintenance profile backs up:
 Backups are written to <code>cloud-infra/backups</code>, which is ignored by
 Git.
 
+The application-data archive includes both AI-provider ciphertext in the
+control-plane store and its `ai-secrets.key`. Keep the complete archive
+together; restoring only the JSON store leaves saved provider keys
+undecryptable.
+
 ## Create A Backup
 
 Run from the repository root while Docker is available:
@@ -59,6 +64,7 @@ Afterward, verify:
 5. enrollment-token creation
 6. ShellHub login, namespace, device acceptance, and SSH access
 7. audit history
+8. AI-provider connection test, when the assistant is configured
 
 Practice restore on a separate non-production installation. A backup that has
 not been restored and checked is not yet a proven recovery path.

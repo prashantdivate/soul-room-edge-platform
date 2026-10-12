@@ -11,6 +11,7 @@ and first device enrollment.
 | Start Soul Room on Windows, Linux, macOS, or WSL | [Run the platform locally](../cloud-infra/docs/RUNNING_LOCALLY.md) |
 | Configure organization defaults and deployment settings | [On-premises administration](../cloud-infra/docs/ONPREM_ADMIN.md) |
 | Configure bundled remote access | [ShellHub integration](../cloud-infra/docs/SHELLHUB_INTEGRATION.md) |
+| Connect and govern the operations assistant | [AI Assistant](../cloud-infra/docs/AI_ASSISTANT.md) |
 | Back up or restore a local installation | [Backup and restore](../cloud-infra/docs/BACKUP_RESTORE.md) |
 | Understand the services and trust boundaries | [System architecture](../cloud-infra/docs/SYSTEM_ARCHITECTURE.md) |
 | Understand stored records | [Data model](../cloud-infra/docs/DATA_MODEL.md) |

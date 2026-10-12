@@ -149,6 +149,42 @@ paths:
       responses:
         "200": { description: Tenant override removed }
         "403": { description: Tenant settings permission required }
+  /ai/config:
+    get:
+      summary: Read the redacted tenant AI-provider configuration
+      responses:
+        "200": { description: Provider, model, readiness, and key hint; never the key or ciphertext }
+    put:
+      summary: Encrypt and replace the tenant AI-provider configuration
+      responses:
+        "200": { description: Configuration saved }
+        "403": { description: Tenant settings permission required }
+    delete:
+      summary: Remove the tenant AI-provider configuration and encrypted credential
+      responses:
+        "200": { description: Configuration removed }
+  /ai/test:
+    post:
+      summary: Test the saved provider connection with a bounded completion
+      responses:
+        "200": { description: Provider connection verified }
+        "403": { description: Tenant settings permission required }
+        "502": { description: Provider rejected or failed the request }
+  /ai/chat:
+    post:
+      summary: Analyze a minimized tenant fleet snapshot
+      responses:
+        "200": { description: Answer, safe proposed actions, follow-up prompts, and token usage }
+        "409": { description: AI provider is not configured }
+        "429": { description: Per-user request guard reached }
+  /ai/actions:
+    post:
+      summary: Approve and queue a signed typed action proposed by the assistant
+      responses:
+        "201": { description: Typed device job queued idempotently }
+        "403": { description: Approval or current RBAC permission rejected }
+        "404": { description: Target device no longer exists }
+        "409": { description: Target device no longer reports the required capability }
   /alerts:
     get:
       summary: List alerts

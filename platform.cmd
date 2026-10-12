@@ -32,6 +32,8 @@ call :help
 exit /b 2
 
 :install
+echo Installing published GHCR images. Local source changes are not built.
+echo Use "platform.cmd build" to run the code in this checkout.
 docker compose pull || goto :failed
 docker compose up --no-build --remove-orphans -d || goto :failed
 docker compose ps || goto :failed

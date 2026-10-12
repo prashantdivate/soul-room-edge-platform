@@ -186,3 +186,36 @@ func TestPlatformSettingsAreTenantIsolatedAndPersisted(t *testing.T) {
 		t.Fatal("settings override was not reset")
 	}
 }
+
+func TestAIConfigurationIsTenantIsolatedAndPersisted(t *testing.T) {
+	path := t.TempDir() + "/store.json"
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orgA, _ := store.CreateOrganization("Tenant A", "ai-a")
+	orgB, _ := store.CreateOrganization("Tenant B", "ai-b")
+	tcA := tenancy.Context{TenantID: orgA.ID, ActorID: "owner-a"}
+	tcB := tenancy.Context{TenantID: orgB.ID, ActorID: "owner-b"}
+	value := model.AIConfiguration{Provider: "openai", BaseURL: "https://api.openai.com/v1", Model: "small-model", APIKeyCiphertext: "encrypted-value", KeyHint: "ends in 1234", Enabled: true}
+	if err := store.SaveAIConfiguration(tcA, value); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := store.AIConfiguration(tcB); ok {
+		t.Fatal("tenant B received tenant A AI configuration")
+	}
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := reopened.AIConfiguration(tcA)
+	if !ok || got.APIKeyCiphertext != "encrypted-value" || got.UpdatedBy != "owner-a" || got.UpdatedAt.IsZero() {
+		t.Fatalf("AI configuration was not persisted: %+v", got)
+	}
+	if err := reopened.DeleteAIConfiguration(tcA); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reopened.AIConfiguration(tcA); ok {
+		t.Fatal("AI configuration was not deleted")
+	}
+}

@@ -60,6 +60,8 @@ fi
 case "$command" in
   install)
     require_docker
+    echo "Installing published GHCR images. Local source changes are not built."
+    echo "Use './platform.sh build' to run the code in this checkout."
     compose pull
     compose up --no-build --remove-orphans -d
     compose ps

@@ -22,3 +22,10 @@ Core entities:
 * OTA campaigns
 * alerts, alert events, notifications
 * audit events
+* encrypted AI-provider configurations
+
+The lightweight local store also persists one AI-provider configuration per
+tenant. It contains provider metadata, model name, an AES-256-GCM ciphertext,
+and a non-secret key hint. Plaintext provider keys and AI conversation text are
+not data-model records. The encryption key is stored separately as
+`/data/ai-secrets.key` and must be backed up with the application-data volume.

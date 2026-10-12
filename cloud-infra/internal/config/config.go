@@ -29,6 +29,9 @@ type Config struct {
 	DefaultOTAPilotPercent    int
 	DefaultEnrollmentTTLHours int
 	DefaultJobTTLMinutes      int
+	AISecretKeyPath           string
+	AIRequestTimeout          time.Duration
+	AIRequestsPerMinute       int
 }
 
 func Load() Config {
@@ -55,6 +58,9 @@ func Load() Config {
 		DefaultOTAPilotPercent:    integerRange("SOULROOM_DEFAULT_OTA_PILOT_PERCENT", 10, 1, 100),
 		DefaultEnrollmentTTLHours: integerRange("SOULROOM_DEFAULT_ENROLLMENT_TTL_HOURS", 24, 1, 720),
 		DefaultJobTTLMinutes:      integerRange("SOULROOM_DEFAULT_JOB_TTL_MINUTES", 60, 5, 10080),
+		AISecretKeyPath:           getenv("SOULROOM_AI_SECRET_KEY_PATH", ".soul-room/ai-secrets.key"),
+		AIRequestTimeout:          duration("SOULROOM_AI_REQUEST_TIMEOUT", 45*time.Second),
+		AIRequestsPerMinute:       integerRange("SOULROOM_AI_REQUESTS_PER_MINUTE", 30, 1, 120),
 	}
 }
 

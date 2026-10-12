@@ -41,6 +41,17 @@
   UI overrides, deployment-default reset, audit events, and safe read-only
   infrastructure visibility. Settings drive presence, telemetry, OTA,
   enrollment, and job behavior rather than acting as UI-only preferences.
+* A first-class AI operations assistant with tenant-specific OpenAI, Anthropic,
+  and OpenAI-compatible connections; AES-256-GCM credential storage; compact,
+  on-demand fleet context; session-only conversations; permission-aware page
+  guidance; and explicit, signed approval for a narrow allowlist of typed
+  device jobs. The assistant makes no background provider requests and never
+  receives raw logs, credentials, certificates, precise locations, users, or
+  the full package inventory.
+* AI device operations are gated by both current RBAC and agent-reported
+  capabilities at proposal and approval time. Supported collection, advisory,
+  and delayed reboot jobs have matching Linux-agent handlers; approval replay
+  remains idempotent and all accepted actions are audit recorded.
 * Repository-level CI, CodeQL, dependency and container vulnerability gates,
   weekly dependency updates, and multi-architecture GHCR image publication
   with SBOM and provenance metadata.

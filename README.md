@@ -227,6 +227,7 @@ or the [i.MX8MP example](./agent/docs/RUNNING_ON_YOCTO_IMX8MP.md).
 | Updates | Capability-gated Mender, RAUC, OSTree, SWUpdate, Flatpak, and custom adapters with pilot-first rollout |
 | Remote access | Bundled self-hosted ShellHub with outbound device tunnels and audited launch from Soul Room |
 | Software posture | Debian/RPM package inventory and optional Trivy-backed vulnerability advisory scans |
+| AI assistant | Optional OpenAI, Anthropic, or OpenAI-compatible operations copilot with compact fleet context and approval-gated typed actions |
 | Administration | Tenant isolation, users and roles, platform settings, audit history, backup, and restore |
 | Interface | Responsive React console, fleet search, charts, exports, and MapLibre/OpenStreetMap fleet mapping |
 
@@ -246,6 +247,20 @@ the separate ShellHub agent only on devices that permit interactive access.
 The Soul Room agent handles fleet inventory, telemetry, jobs, and OTA. The
 ShellHub agent handles the remote SSH tunnel. See the [ShellHub guide](./cloud-infra/docs/SHELLHUB_INTEGRATION.md)
 for device enrollment, ports, persistence, and production TLS requirements.
+
+## AI Assistant
+
+The top-level **AI Assistant** workspace can use OpenAI, Anthropic, or an
+OpenAI-compatible local/private model. An organization owner connects the
+provider from that page; no API key is required in `.env`.
+
+Soul Room sends a compact tenant-scoped snapshot only when a user asks a
+question. It does not send raw logs, credentials, certificates, precise
+locations, remote-access identities, user records, or full package lists. The
+model cannot directly change the platform: supported device jobs appear as a
+separate operator approval and are revalidated by RBAC before they are queued.
+See the [AI Assistant guide](./cloud-infra/docs/AI_ASSISTANT.md) for local-model
+URLs, token controls, data boundaries, action safety, and backup requirements.
 
 ## Data And Clean Installs
 
@@ -296,6 +311,7 @@ common task:
 | Integrate with Yocto | [Yocto integration](./agent/docs/YOCTO_INTEGRATION.md) |
 | Configure update mechanisms | [OTA adapters](./agent/docs/OTA_ADAPTERS.md) |
 | Configure remote access | [ShellHub integration](./cloud-infra/docs/SHELLHUB_INTEGRATION.md) |
+| Configure the AI operations assistant | [AI Assistant](./cloud-infra/docs/AI_ASSISTANT.md) |
 | Diagnose an offline agent | [Agent troubleshooting](./agent/docs/TROUBLESHOOTING.md) |
 | Back up or restore data | [Backup and restore](./cloud-infra/docs/BACKUP_RESTORE.md) |
 | Review security assumptions | [Cloud threat model](./cloud-infra/docs/THREAT_MODEL.md) and [agent threat model](./agent/docs/THREAT_MODEL.md) |

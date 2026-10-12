@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soul-room/cloud-infra/internal/assistant"
 	"github.com/soul-room/cloud-infra/internal/audit"
 	"github.com/soul-room/cloud-infra/internal/auth"
 	"github.com/soul-room/cloud-infra/internal/certificates"
@@ -30,14 +31,21 @@ import (
 )
 
 type Server struct {
-	Config config.Config
-	Store  *storage.Store
-	CA     *certificates.Authority
-	Hash   auth.PasswordHasher
+	Config    config.Config
+	Store     *storage.Store
+	CA        *certificates.Authority
+	Hash      auth.PasswordHasher
+	Assistant *assistant.Service
 }
 
 func New(cfg config.Config, store *storage.Store, ca *certificates.Authority) *Server {
-	return &Server{Config: cfg, Store: store, CA: ca, Hash: auth.PBKDF2Hasher{}}
+	return &Server{
+		Config:    cfg,
+		Store:     store,
+		CA:        ca,
+		Hash:      auth.PBKDF2Hasher{},
+		Assistant: assistant.New(cfg.AISecretKeyPath, cfg.AIRequestTimeout, cfg.AIRequestsPerMinute),
+	}
 }
 
 func (s *Server) ControlHandler() http.Handler {
@@ -61,6 +69,10 @@ func (s *Server) ControlHandler() http.Handler {
 	mux.Handle("/api/v1/dev-ca", s.withAuth(http.HandlerFunc(s.devCA)))
 	mux.Handle("/api/v1/platform-info", s.withAuth(http.HandlerFunc(s.platformInfo)))
 	mux.Handle("/api/v1/platform-settings", s.withAuth(http.HandlerFunc(s.platformSettings)))
+	mux.Handle("/api/v1/ai/config", s.withAuth(http.HandlerFunc(s.aiConfiguration)))
+	mux.Handle("/api/v1/ai/test", s.withAuth(http.HandlerFunc(s.aiTest)))
+	mux.Handle("/api/v1/ai/chat", s.withAuth(http.HandlerFunc(s.aiChat)))
+	mux.Handle("/api/v1/ai/actions", s.withAuth(http.HandlerFunc(s.aiAction)))
 	mux.Handle("/api/v1/deployments", s.withAuth(staticList("deployments")))
 	mux.Handle("/api/v1/applications", s.withAuth(staticList("applications")))
 	mux.Handle("/api/v1/artifacts", s.withAuth(http.HandlerFunc(s.artifacts)))

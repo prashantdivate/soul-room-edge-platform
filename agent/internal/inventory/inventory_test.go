@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/soul-room/edge-agent/internal/identity"
@@ -17,6 +18,15 @@ func TestCollectReadsLinuxInventory(t *testing.T) {
 	}
 	if got.CPUCores < 1 || got.MemoryTotalBytes == 0 || got.StorageTotalBytes == 0 {
 		t.Fatalf("missing hardware capacity: %+v", got)
+	}
+}
+
+func TestCapabilitiesAdvertiseSupportedAssistantJobs(t *testing.T) {
+	got := capabilities(t.TempDir())
+	for _, capability := range []string{"jobs", "job:collect_diagnostics", "job:collect_inventory", "job:collect_logs", "job:reboot"} {
+		if !slices.Contains(got, capability) {
+			t.Fatalf("missing capability %q in %#v", capability, got)
+		}
 	}
 }
 

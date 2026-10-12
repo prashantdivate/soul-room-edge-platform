@@ -64,6 +64,11 @@ func (r *Registry) Register(jobType string, h Handler) {
 	r.handlers[jobType] = h
 }
 
+func (r *Registry) Supports(jobType string) bool {
+	_, ok := r.handlers[jobType]
+	return ok
+}
+
 func (r *Registry) Execute(ctx context.Context, job Job, reporter ProgressReporter) Result {
 	start := time.Now()
 	if err := job.Validate(time.Now()); err != nil {

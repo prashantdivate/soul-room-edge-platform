@@ -2,8 +2,10 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os/exec"
 	"time"
 
@@ -37,6 +39,7 @@ func newJobRegistry(a *Agent) *jobs.Registry {
 		}
 		return successfulJob(job.ID, report)
 	}))
+	registry.Register("reboot", jobs.NewFunctionHandler(nil, runReboot))
 	registry.Register("flatpak_update", jobs.NewFunctionHandler(func(_ context.Context, job jobs.Job) error {
 		_, err := applications.ParseFlatpakUpdate(job.Payload)
 		return err
@@ -72,6 +75,45 @@ func newJobRegistry(a *Agent) *jobs.Registry {
 		return result
 	}))
 	return registry
+}
+
+type executableLookup func(string) (string, error)
+type systemCommand func(context.Context, string, ...string) ([]byte, error)
+
+func runReboot(ctx context.Context, job jobs.Job, reporter jobs.ProgressReporter) jobs.Result {
+	return runRebootWith(ctx, job, reporter, exec.LookPath, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return exec.CommandContext(ctx, name, args...).CombinedOutput()
+	})
+}
+
+func runRebootWith(ctx context.Context, job jobs.Job, reporter jobs.ProgressReporter, lookup executableLookup, run systemCommand) jobs.Result {
+	started := time.Now()
+	if reporter != nil {
+		_ = reporter.Progress(ctx, job.ID, "Scheduling the approved device reboot")
+	}
+	command, args, delay, err := rebootCommand(lookup, job.ID)
+	if err != nil {
+		return jobs.Result{JobID: job.ID, State: "failed", ExitCode: 1, Stderr: err.Error(), ErrorClass: "reboot_unavailable", StartedAt: started, FinishedAt: time.Now()}
+	}
+	output, err := run(ctx, command, args...)
+	if err != nil {
+		return jobs.Result{JobID: job.ID, State: "failed", ExitCode: 1, Stderr: fmt.Sprintf("could not schedule reboot: %v: %s", err, string(output)), ErrorClass: "reboot_schedule", StartedAt: started, FinishedAt: time.Now()}
+	}
+	return jobs.Result{JobID: job.ID, State: "succeeded", Stdout: fmt.Sprintf("Device reboot scheduled %s. %s", delay, string(output)), StartedAt: started, FinishedAt: time.Now()}
+}
+
+func rebootCommand(lookup executableLookup, jobID string) (string, []string, string, error) {
+	if systemdRun, err := lookup("systemd-run"); err == nil {
+		if systemctl, systemctlErr := lookup("systemctl"); systemctlErr == nil {
+			digest := sha256.Sum256([]byte(jobID))
+			unit := fmt.Sprintf("soul-room-reboot-%x", digest[:6])
+			return systemdRun, []string{"--unit=" + unit, "--on-active=10s", systemctl, "reboot"}, "in about 10 seconds", nil
+		}
+	}
+	if shutdown, err := lookup("shutdown"); err == nil {
+		return shutdown, []string{"-r", "+1", "Soul Room approved reboot"}, "in about one minute", nil
+	}
+	return "", nil, "", errors.New("no supported reboot scheduler was found (systemd-run/systemctl or shutdown is required)")
 }
 
 func runFlatpakUpdate(ctx context.Context, job jobs.Job, reporter jobs.ProgressReporter) jobs.Result {

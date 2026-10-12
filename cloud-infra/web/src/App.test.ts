@@ -10,13 +10,18 @@ function pagesFor(role: string, permissions: string[]) {
 
 describe("permission-aware navigation", () => {
   it("keeps fleet analysis visible while hiding unavailable administration", () => {
-    const pages = pagesFor("read_only_viewer", ["device.read", "telemetry.read"]);
+    const pages = pagesFor("read_only_viewer", ["device.read", "telemetry.read", "ai.use"]);
     expect(pages).toContain("devices");
     expect(pages).toContain("health");
+    expect(pages).toContain("assistant");
     expect(pages).not.toContain("remote");
     expect(pages).not.toContain("users");
     expect(pages).not.toContain("audit");
     expect(pages).not.toContain("onprem");
+  });
+
+  it("hides the assistant when the role does not include AI access", () => {
+    expect(pagesFor("custom_role", ["device.read", "telemetry.read"])).not.toContain("assistant");
   });
 });
 

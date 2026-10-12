@@ -52,6 +52,7 @@ import {
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   TerminalSquare,
   Trash2,
   TriangleAlert,
@@ -103,6 +104,7 @@ import {
 } from "./api";
 const FleetMap = React.lazy(() => import("./FleetMap").then((module) => ({ default: module.FleetMap })));
 const PackageBrandIcon = React.lazy(() => import("./PackageBrandIcon"));
+const AIAssistant = React.lazy(() => import("./AIAssistant"));
 
 type PageId =
   | "overview"
@@ -123,6 +125,7 @@ type PageId =
   | "audit"
   | "users"
   | "health"
+  | "assistant"
   | "onprem";
 
 type Page = { id: PageId; label: string; description: string; icon: React.ComponentType<{ size?: number }> };
@@ -172,6 +175,13 @@ const navigation: NavigationGroup[] = [
     ],
   },
   {
+    label: "AI Assistant",
+    icon: Sparkles,
+    pages: [
+      { id: "assistant", label: "Operations copilot", description: "Understand fleet state and approve guided operational actions.", icon: Sparkles },
+    ],
+  },
+  {
     label: "Settings",
     icon: Settings2,
     pages: [
@@ -205,6 +215,7 @@ const pagePermissions: Partial<Record<PageId, string>> = {
   enrollment: "device.enroll",
   audit: "audit.read",
   users: "user.manage",
+  assistant: "ai.use",
   onprem: "tenant.settings.manage",
 };
 
@@ -545,6 +556,7 @@ function PageContent({ page, data, search, onData, onNavigate, onRefresh }: { pa
     case "audit": return <Audit data={data} search={search} />;
     case "users": return <Users data={data} onData={onData} />;
     case "health": return <Health data={data} />;
+    case "assistant": return <React.Suspense fallback={<PageLoading label="Preparing the operations copilot" />}><AIAssistant data={data} onNavigate={(next) => onNavigate(next as PageId)} onRefresh={onRefresh} /></React.Suspense>;
     case "onprem": return <OnPrem data={data} onData={onData} />;
   }
 }
@@ -1156,6 +1168,7 @@ function pageExportData(page: PageId, data: FleetData) {
     case "audit": return { ...shared, audit_events: data.audit };
     case "users": return { ...shared, users: data.users, roles: data.roles };
     case "enrollment": return { ...shared, enrollment_tokens: data.enrollmentTokens.map(({ token: _token, ...record }) => record) };
+    case "assistant": return { ...shared, assistant: "Conversation history and provider credentials are intentionally excluded from exports." };
     default: return { ...shared, devices: data.devices, jobs: data.jobs, alerts: deriveAlerts(data.devices, data.settings.device_offline_minutes) };
   }
 }

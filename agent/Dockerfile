@@ -1,4 +1,4 @@
-FROM golang:1.27.1 AS source
+FROM golang:1.27.2 AS source
 WORKDIR /src
 COPY go.mod ./
 COPY cmd ./cmd

@@ -37,7 +37,7 @@ is missing, or it does not define owner credentials, a clean installation uses:
 
 | Field | Local fallback |
 | --- | --- |
-| Email | <code>admin@soulroom.local</code> |
+| Email | <code>admin@example.local</code> |
 | Password | <code>change-me-local</code> |
 
 These credentials are intentionally limited to development convenience. Do not

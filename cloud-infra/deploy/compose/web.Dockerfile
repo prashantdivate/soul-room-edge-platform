@@ -8,7 +8,7 @@ COPY web/src ./src
 COPY web/public ./public
 RUN npm run build
 
-FROM nginx:1.31.6-alpine3.24-slim
+FROM nginx:1.31.7-alpine3.24-slim
 COPY deploy/compose/web.nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/dist /usr/share/nginx/html
 RUN apk add --no-cache "pcre2>=10.49-r0" && \
